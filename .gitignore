@@ -152,6 +152,21 @@ nltk_data/
 !/ml/data/*.json
 !/ml/data/.gitkeep
 
+# BigEarthNet v2.0 dataset (SAR-FuseSeg training data) — never commit the
+# downloaded/extracted patches, only the small manifest JSON under ml/manifests/.
+/ml/data/bigearthnet_subset/
+/ml/data/*.parquet
+/ml/data/.build.lock
+
+# SatVLM (Qwen2.5-VL) model: keep the adapter/training code, never its weights,
+# QLoRA checkpoints, HF cache, or the BigEarthNet.txt training data it downloads.
+/ml/satvlm/checkpoints/
+/ml/satvlm/data/
+/ml/satvlm/**/*.safetensors
+/ml/satvlm/**/*.bin
+**/.cache/huggingface/
+huggingface_hub/
+
 # ---- Frontend (owned by member 6; nothing generated here yet) ----
 node_modules/
 frontend/dist/
