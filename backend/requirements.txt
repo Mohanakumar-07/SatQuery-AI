@@ -1,0 +1,27 @@
+# SatQuery AI — backend web/API runtime
+# Install:  pip install -r backend/requirements.txt
+#
+# Deliberately free of GDAL/rasterio/torch so the API, routes, schemas, job
+# plumbing and report builder run on any machine (including Windows) before the
+# geospatial and model stacks are attached. Optional integrations are listed in
+# requirements-geospatial.txt and requirements-ml.txt and are detected at runtime.
+
+fastapi>=0.115,<1.0
+uvicorn[standard]>=0.27
+pydantic>=2.7,<3.0
+python-multipart>=0.0.9
+starlette>=0.37
+
+# Metadata database (SQLite for the MVP, PostgreSQL later)
+SQLAlchemy>=2.0,<3.0
+
+# Background inference queue (section 7.0 — mandatory for real runs)
+redis>=5.0
+rq>=1.16
+
+# Artifact encoding / raster previews without GDAL
+Pillow>=10.2
+numpy>=1.24,<3.0
+
+# JSON serialisation for large result payloads
+orjson>=3.9

@@ -1,0 +1,33 @@
+{
+  "version": "v1",
+  "description": "SAR-FuseSeg 4-class mapping from CORINE Land Cover (CLC2018) / BigEarthNet v2.0 43-class nomenclature reference maps to {built-up, water, vegetation, other}. Documented per Implementation_Plan_v1.2.md (versioned class mapping requirement).",
+  "source_labels_reference": "CORINE Land Cover 2018 nomenclature as rasterized into BigEarthNet v2.0 Reference_Maps (pixel-level, coarse: CLC minimum mapping unit is 25 ha / 100 m, resampled onto 10 m Sentinel-2 grid -> inherently coarse near class boundaries).",
+  "ignore_index": 255,
+  "target_classes": ["built-up", "water", "vegetation", "other"],
+  "mapping": {
+    "Urban fabric": "built-up",
+    "Industrial or commercial units": "built-up",
+    "Inland waters": "water",
+    "Marine waters": "water",
+    "Inland wetlands": "water",
+    "Coastal wetlands": "water",
+    "Broad-leaved forest": "vegetation",
+    "Coniferous forest": "vegetation",
+    "Mixed forest": "vegetation",
+    "Transitional woodland, shrub": "vegetation",
+    "Natural grassland and sparsely vegetated areas": "vegetation",
+    "Moors, heathland and sclerophyllous vegetation": "vegetation",
+    "Pastures": "vegetation",
+    "Arable land": "vegetation",
+    "Permanent crops": "vegetation",
+    "Complex cultivation patterns": "vegetation",
+    "Agro-forestry areas": "vegetation",
+    "Land principally occupied by agriculture, with significant areas of natural vegetation": "vegetation",
+    "Beaches, dunes, sands": "other"
+  },
+  "notes": [
+    "Wetlands are grouped under 'water' (saturated/water-adjacent land cover) rather than 'vegetation'; this is a documented judgement call, not a CORINE default.",
+    "Any CLC class not listed here (e.g. bare rock, burnt areas, glaciers - rare in the BigEarthNet acquisition window) falls back to 'other'.",
+    "Reference-map pixels with no valid CLC code, or that fall in the seasonal-snow/cloud/shadow-affected patch list published alongside BigEarthNet v2.0, are mapped to ignore_index (255) rather than guessed."
+  ]
+}

@@ -1,0 +1,19 @@
+# SatQuery AI — optional geospatial extras (plan section 4.2)
+#
+# The backend imports these opportunistically:
+#   * rasterio  -> full raster metadata, reprojection, mask rendering, polygonizing
+#   * pyproj    -> CRS conversion when measuring area in a projected CRS
+#   * shapely   -> geometry operations
+#   * geopandas -> tabular region handling
+# Without them the API still validates uploads through the pure-Python GeoTIFF
+# probe in backend/app/geospatial/geotiff_tags.py, but it reports geographic
+# precision as reduced and refuses to invent coordinates.
+#
+# On Windows, install GDAL from conda-forge or Christoph Gohlke's wheels first:
+#   conda install -c conda-forge gdal rasterio shapely pyproj geopandas
+
+rasterio>=1.3.9
+GDAL>=3.8
+pyproj>=3.6
+Shapely>=2.0
+geopandas>=0.14

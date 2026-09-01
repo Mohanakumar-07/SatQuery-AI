@@ -1,0 +1,60 @@
+{
+  "policy_version": "thresholds-unvalidated-v1",
+  "status": "UNVALIDATED_PLACEHOLDER",
+  "warning": "Every numeric threshold below is a schema example carried over from plan section 11.2, not a calibrated value. Real values must be fitted on held-out calibration splits and this file re-versioned. The confidence service emits a CALIBRATION_UNVALIDATED warning while this file still says status=UNVALIDATED_PLACEHOLDER.",
+  "combine": "separate",
+  "averaging_forbidden": true,
+  "abstain_message": "I cannot answer this question reliably with the available evidence, so I have not guessed. See the warnings for what was missing.",
+  "satvlm_semantics": {
+    "closed_answer_vqa": "closed_answer_probability",
+    "caption_or_free_text": "evidence_coverage",
+    "final_composed_answer": "claim_validation",
+    "missing_or_contradictory_evidence": "abstain",
+    "note": "Plan section 11.0: never display a generic 'AI confidence' percentage for generated free text."
+  },
+  "score_kinds": {
+    "SatVLM": "claim_validation",
+    "SatVLMComposition": "claim_validation",
+    "ChangeNet": "mask_score",
+    "SAR-FuseSeg": "mask_score",
+    "default": "unknown"
+  },
+  "policies": {
+    "single_scene_vqa": {
+      "task": "single_scene_vqa",
+      "accept_threshold": 0.7,
+      "warning_threshold": 0.5,
+      "abstain_below": 0.5,
+      "calibration_version": null,
+      "threshold_policy_version": "single-scene-thresholds-unvalidated-v1",
+      "required_evidence_fields": ["answer", "models"],
+      "fallback": "abstain",
+      "provisional": true,
+      "notes": "Free-text scene description is scored on evidence coverage and claim validation, so accept requires answer_status=verified and unsupported_claims=0."
+    },
+    "bi_temporal_change": {
+      "task": "bi_temporal_change",
+      "accept_threshold": 0.78,
+      "warning_threshold": 0.62,
+      "abstain_below": 0.62,
+      "calibration_version": null,
+      "threshold_policy_version": "change-thresholds-unvalidated-v1",
+      "required_evidence_fields": ["evidence.overlay", "evidence.region_count", "evidence.area_value|evidence.percentage"],
+      "fallback": "abstain",
+      "provisional": true,
+      "notes": "Threshold applies to the ChangeNet mask score. SatVLM composition is reported separately and gates the answer on claim validation, never on its own percentage."
+    },
+    "optical_sar_land_cover": {
+      "task": "optical_sar_land_cover",
+      "accept_threshold": 0.7,
+      "warning_threshold": 0.55,
+      "abstain_below": 0.55,
+      "calibration_version": null,
+      "threshold_policy_version": "fuseseg-thresholds-unvalidated-v1",
+      "required_evidence_fields": ["evidence.class_areas", "evidence.overlay"],
+      "fallback": "warn",
+      "provisional": true,
+      "notes": "Per-class confidence is calibrated on a geographic validation split. Optical-only, SAR-only and fused scores are reported side by side and never averaged (plan section 10.3)."
+    }
+  }
+}

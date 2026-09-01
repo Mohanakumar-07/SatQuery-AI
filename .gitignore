@@ -1,0 +1,165 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+# Any virtualenv: .venv, .venv-ml, venv, env, ...
+.venv*/
+venv*/
+env*/
+ENV*/
+*.egg/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# ---- Local state, metadata DB, runtime artifacts ----
+var/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite3
+
+# Stored uploads, masks, overlays, reports and checkpoints are runtime data.
+artifacts/uploads/*
+artifacts/masks/*
+artifacts/geojson/*
+artifacts/reports/*
+artifacts/checkpoints/*
+!artifacts/uploads/.gitkeep
+!artifacts/masks/.gitkeep
+!artifacts/geojson/.gitkeep
+!artifacts/reports/.gitkeep
+!artifacts/checkpoints/.gitkeep
+
+# ---- Secrets / local env ----
+.env
+.env.local
+*.pem
+
+# ---- Model weights, checkpoints, archives and datasets: NEVER commit ----
+# Weights and exported models
+*.pt
+*.pth
+*.pt2
+*.ckpt
+*.safetensors
+*.bin
+*.onnx
+*.openvino
+*.gguf
+*.ggml
+*.pb
+*.tflite
+*.mlmodel
+*.pkl
+*.pickle
+*.joblib
+*.h5
+*.hdf5
+*.h5ad
+*.npy
+*.npz
+*.msgpack
+*.lstm
+
+# Distribution archives (change checkpoints arrive as .zip / .tar.gz)
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.tar.bz2
+*.tbz2
+*.tar.xz
+*.txz
+*.gz
+*.bz2
+*.xz
+*.zst
+*.7z
+*.rar
+*.ISO
+*.iso
+
+# Raster, tile and vector payloads (GeoTIFF scenes, BigEarthNet/SEN12MS tiles, GIS layers)
+*.tif
+*.tiff
+*.gtif
+*.ovr
+*.msk
+*.img
+*.ecw
+*.jp2
+*.j2k
+*.sid
+*.ntv2
+*.vrt
+*.aux.xml
+*.gpkg
+*.gpkg-wal
+*.gpkg-shm
+*.shp
+*.shx
+*.dbf
+*.prj
+*.cpg
+*.sbn
+*.sbx
+*.qix
+*.fgb
+*.gml
+*.mbtiles
+*.pbf
+*.lmdb
+*.mdb
+*.arrow
+*.parquet
+*.feather
+*.tfrecord
+*.rec
+*.zarr/
+*.SAFE/
+*.rasdaman/
+
+# Experiment, cache and run output
+runs/
+lightning_logs/
+mlruns/
+wandb/
+neptune/
+tensorboard/
+tb_logs/
+.clearml/
+.cache/
+models--*/
+deepface/
+nltk_data/
+
+# ---- ml/: keep the folder and the team's code, push none of its data ----
+# Third-party clones carry their own .git and must not become an embedded repo.
+# Re-create locally with:
+#   git clone --depth 1 https://github.com/wgcxb/ChangeFormer ml/vendor/ChangeFormer
+/ml/vendor/
+
+# Datasets land here. Code, manifests and notes in this folder stay tracked.
+/ml/data/**
+!/ml/data/*.py
+!/ml/data/*.md
+!/ml/data/*.json
+!/ml/data/.gitkeep
+
+# ---- Frontend (owned by member 6; nothing generated here yet) ----
+node_modules/
+frontend/dist/
+frontend/.vite/
+
+# ---- Editors / OS ----
+.idea/
+.vscode/
+Thumbs.db
+Desktop.ini
+.DS_Store

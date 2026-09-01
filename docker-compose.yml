@@ -1,0 +1,86 @@
+# SatQuery AI — MVP development stack
+#
+#   docker compose up              # api + redis + worker
+#   docker compose run worker ...  # one-off worker commands
+#
+# The web layer starts with no GPU and no model weights attached:
+# SATQUERY_PIPELINE_MODE stays "unattached" until the ML owners wire the pipeline,
+# at which point /api/v1/health reports it and analyses run for real.
+
+name: satquery
+
+services:
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: satquery-api:dev
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      SATQUERY_ENV: development
+      SATQUERY_ARTIFACTS_DIR: /app/artifacts
+      SATQUERY_STATE_DIR: /app/var
+      SATQUERY_DATABASE_URL: sqlite:////app/var/satquery.db
+      SATQUERY_REDIS_URL: redis://redis:6379/0
+      SATQUERY_QUEUE_MODE: rq
+      SATQUERY_CORS_ORIGINS: http://localhost:5173
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./artifacts:/app/artifacts
+      - ./var:/app/var
+      - ./backend/app:/app/app:ro
+    depends_on:
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  # GPU worker: one analysis at a time (MVP GPU policy, section 7.0).
+  # Build with the model stack attached and deploy on the GPU host.
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: satquery-api:dev
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      SATQUERY_ARTIFACTS_DIR: /app/artifacts
+      SATQUERY_STATE_DIR: /app/var
+      SATQUERY_DATABASE_URL: sqlite:////app/var/satquery.db
+      SATQUERY_REDIS_URL: redis://redis:6379/0
+      SATQUERY_QUEUE_MODE: rq
+      SATQUERY_GPU_CONCURRENCY: "1"
+    command: ["python", "-m", "app.workers.main"]
+    volumes:
+      - ./artifacts:/app/artifacts
+      - ./var:/app/var
+      - ./backend/app:/app/app:ro
+      - ./ml:/app/ml:ro
+    depends_on:
+      redis:
+        condition: service_started
+    restart: unless-stopped
+    # Uncomment for CUDA inference:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+
+volumes:
+  redis-data:

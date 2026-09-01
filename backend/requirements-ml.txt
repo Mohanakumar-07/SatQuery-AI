@@ -1,0 +1,33 @@
+# SatQuery AI — model stack (reference manifest for the ML owners)
+#
+# The backend never imports these. Model adapters are attached through
+# backend/app/models/* and the pipeline seam in backend/app/workers/pipeline.py,
+# which are owned by the ML team (plan sections 4.3, 4.4, 10).
+#
+# This file exists so GPU environments are reproducible; it is not installed by
+# the API image.
+
+# Inference
+torch>=2.3
+torchvision>=0.18
+transformers>=4.45           # Qwen2.5-VL-7B-Instruct
+accelerate>=0.33
+qwen-vl-utils>=0.0.6
+pillow>=10.2
+
+# QLoRA adaptation (SatVLM, training-only environment)
+peft>=0.11
+bitsandbytes>=0.43
+datasets>=2.20
+trl>=0.9
+safetensors>=0.4
+
+# ChangeFormer V6 / SAR-FuseSeg training + evaluation
+timm>=1.0
+scikit-learn>=1.4
+scipy>=1.11
+opencv-python-headless>=4.9
+tensorboard>=2.16
+
+# Experiment tracking once the registry moves off YAML/JSON (section 4.2)
+mlflow>=2.14
