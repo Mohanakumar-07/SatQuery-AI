@@ -12,8 +12,9 @@ pydantic>=2.7,<3.0
 python-multipart>=0.0.9
 starlette>=0.37
 
-# Metadata database (SQLite for the MVP, PostgreSQL later)
+# Metadata database (SQLite locally or PostgreSQL/Neon through DATABASE_URL)
 SQLAlchemy>=2.0,<3.0
+psycopg[binary]>=3.2,<4.0
 
 # Background inference queue (section 7.0 — mandatory for real runs)
 redis>=5.0

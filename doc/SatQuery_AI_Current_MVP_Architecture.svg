@@ -1,0 +1,243 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1050" viewBox="0 0 1800 1050" role="img" aria-labelledby="title desc">
+  <title id="title">SatQuery AI current MVP architecture</title>
+  <desc id="desc">A clean monochrome architecture diagram showing the React JavaScript frontend, FastAPI API, canonical geospatial validation, automatic input interpretation, Redis and RQ job handling, constrained model routing, separate preprocessing adapters, SatVLM, ChangeNet, SAR-FuseSeg, evidence processing, storage, reports, confidence calibration, and benchmark governance.</desc>
+
+  <defs>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="0" stdDeviation="0" flood-color="#000000" flood-opacity="0"/>
+    </filter>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#111111"/>
+    </marker>
+    <marker id="arrowMuted" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#555555"/>
+    </marker>
+    <style>
+      .canvas { fill: #FFFFFF; }
+      .ink { fill: #111111; }
+      .muted { fill: #555555; }
+      .micro { font: 700 12px Arial, sans-serif; letter-spacing: 2px; }
+      .title { font: 700 38px Arial, sans-serif; }
+      .subtitle { font: 400 17px Arial, sans-serif; }
+      .lane-title { font: 700 14px Arial, sans-serif; letter-spacing: 1.6px; }
+      .step { font: 700 12px Arial, sans-serif; letter-spacing: 1.3px; }
+      .card-title { font: 700 23px Arial, sans-serif; }
+      .card-sub { font: 400 13px Arial, sans-serif; }
+      .body { font: 400 14px Arial, sans-serif; }
+      .body-bold { font: 700 14px Arial, sans-serif; }
+      .small { font: 400 12px Arial, sans-serif; }
+      .small-bold { font: 700 12px Arial, sans-serif; }
+      .tag { font: 700 11px Arial, sans-serif; letter-spacing: 0.7px; }
+      .card { fill: #FFFFFF; stroke: #111111; stroke-width: 1.4; }
+      .soft { fill: #F4F4F4; stroke: #777777; stroke-width: 1.1; }
+      .sage { fill: #FFFFFF; stroke: #555555; stroke-width: 1.2; }
+      .plum { fill: #FFFFFF; stroke: #555555; stroke-width: 1.2; }
+      .rose { fill: #FFFFFF; stroke: #555555; stroke-width: 1.2; }
+      .model-adapted { fill: #FFFFFF; stroke: #111111; stroke-width: 3; }
+      .model-reused { fill: #FFFFFF; stroke: #111111; stroke-width: 1.4; }
+      .model-built { fill: #FFFFFF; stroke: #111111; stroke-width: 2; stroke-dasharray: 8 6; }
+      .line { stroke: #111111; stroke-width: 2.2; fill: none; marker-end: url(#arrow); }
+      .line-muted { stroke: #555555; stroke-width: 1.7; stroke-dasharray: 7 6; fill: none; marker-end: url(#arrowMuted); }
+      .divider { stroke: #999999; stroke-width: 1; }
+    </style>
+  </defs>
+
+  <rect class="canvas" width="1800" height="1050"/>
+
+  <text x="52" y="48" class="micro muted">SIH26167  |  SATQUERY AI  |  IMPLEMENTATION VIEW</text>
+  <text x="52" y="98" class="title ink">Current MVP Architecture</text>
+  <text x="52" y="128" class="subtitle muted">React JavaScript and FastAPI with automatic routing, specialist models, spatial evidence and visible execution trace.</text>
+
+  <rect x="1492" y="44" width="256" height="44" rx="22" class="soft"/>
+  <text x="1620" y="71" text-anchor="middle" class="tag ink">CURRENT IMPLEMENTATION VIEW</text>
+  <text x="1748" y="119" text-anchor="end" class="small muted">Users choose the question, never the model.</text>
+
+  <line x1="52" y1="153" x2="1748" y2="153" class="divider"/>
+  <text x="52" y="187" class="lane-title ink">ONLINE MVP REQUEST PATH</text>
+  <text x="1748" y="187" text-anchor="end" class="small muted">Solid arrows: request flow  |  Dashed arrows: result, clarification and lifecycle flow</text>
+
+  <!-- Step 1 -->
+  <g filter="url(#shadow)">
+    <rect x="42" y="218" width="210" height="460" rx="16" class="card"/>
+  </g>
+  <rect x="42" y="218" width="210" height="7" rx="3" fill="#111111"/>
+  <circle cx="70" cy="254" r="15" fill="#111111"/>
+  <text x="70" y="259" text-anchor="middle" font-family="Arial" font-size="12" font-weight="700" fill="#FFFFFF">1</text>
+  <text x="94" y="258" class="step ink">USER EXPERIENCE</text>
+  <text x="64" y="302" class="card-title ink">React Web App</text>
+  <text x="64" y="327" class="card-sub muted">JavaScript + Vite + Leaflet</text>
+  <line x1="64" y1="346" x2="230" y2="346" class="divider"/>
+  <text x="64" y="383" class="body-bold ink">Upload image(s)</text>
+  <text x="64" y="408" class="body muted">GeoTIFF, TIFF, PNG or JPEG</text>
+  <text x="64" y="449" class="body-bold ink">Ask a question</text>
+  <text x="64" y="474" class="body muted">No specialist selection</text>
+  <text x="64" y="515" class="body-bold ink">See the result</text>
+  <text x="64" y="540" class="body muted">Map, answer and confidence</text>
+  <text x="64" y="565" class="body muted">Warnings and execution trace</text>
+  <rect x="64" y="609" width="166" height="40" rx="20" class="soft"/>
+  <text x="147" y="634" text-anchor="middle" class="small-bold ink">Zod validates responses</text>
+
+  <!-- Step 2 -->
+  <g filter="url(#shadow)">
+    <rect x="282" y="218" width="220" height="460" rx="16" class="card"/>
+  </g>
+  <rect x="282" y="218" width="220" height="7" rx="3" fill="#111111"/>
+  <circle cx="310" cy="254" r="15" fill="#111111"/>
+  <text x="310" y="259" text-anchor="middle" font-family="Arial" font-size="12" font-weight="700" fill="#FFFFFF">2</text>
+  <text x="334" y="258" class="step ink">API AND JOBS</text>
+  <text x="304" y="302" class="card-title ink">FastAPI</text>
+  <text x="304" y="327" class="card-sub muted">Pydantic contracts</text>
+  <line x1="304" y1="346" x2="480" y2="346" class="divider"/>
+  <text x="304" y="383" class="body-bold ink">Upload service</text>
+  <text x="304" y="408" class="body muted">Safe file and metadata intake</text>
+  <text x="304" y="449" class="body-bold ink">Analysis API</text>
+  <text x="304" y="474" class="body muted">Create and monitor jobs</text>
+  <text x="304" y="515" class="body-bold ink">Clarification contract</text>
+  <text x="304" y="540" class="body muted">Requests missing roles or dates</text>
+  <text x="304" y="581" class="body-bold ink">Artifact and report API</text>
+  <text x="304" y="606" class="body muted">Returns stable URLs and status</text>
+
+  <!-- Step 3 -->
+  <g filter="url(#shadow)">
+    <rect x="532" y="218" width="252" height="460" rx="16" class="card"/>
+  </g>
+  <rect x="532" y="218" width="252" height="7" rx="3" fill="#111111"/>
+  <circle cx="560" cy="254" r="15" fill="#111111"/>
+  <text x="560" y="259" text-anchor="middle" font-family="Arial" font-size="12" font-weight="700" fill="#FFFFFF">3</text>
+  <text x="584" y="258" class="step ink">CPU TRUST PLANE</text>
+  <text x="554" y="302" class="card-title ink">Validate and Interpret</text>
+  <text x="554" y="327" class="card-sub muted">One canonical scene bundle</text>
+  <line x1="554" y1="346" x2="762" y2="346" class="divider"/>
+  <text x="554" y="383" class="body-bold ink">Geospatial checks</text>
+  <text x="554" y="408" class="body muted">CRS, bands, bounds and quality</text>
+  <text x="554" y="449" class="body-bold ink">Pair compatibility</text>
+  <text x="554" y="474" class="body muted">Dates, overlap and alignment</text>
+  <text x="554" y="515" class="body-bold ink">Input interpretation</text>
+  <text x="554" y="540" class="body muted">Single, temporal or optical-SAR</text>
+  <text x="554" y="581" class="body-bold ink">Query interpretation</text>
+  <text x="554" y="606" class="body muted">Supported intent and evidence needs</text>
+  <rect x="554" y="628" width="208" height="28" rx="14" class="soft"/>
+  <text x="658" y="647" text-anchor="middle" class="small-bold ink">Ambiguous input -> clarify</text>
+
+  <!-- Step 4 -->
+  <g filter="url(#shadow)">
+    <rect x="814" y="218" width="204" height="460" rx="16" class="card"/>
+  </g>
+  <rect x="814" y="218" width="204" height="7" rx="3" fill="#111111"/>
+  <circle cx="842" cy="254" r="15" fill="#111111"/>
+  <text x="842" y="259" text-anchor="middle" font-family="Arial" font-size="12" font-weight="700" fill="#FFFFFF">4</text>
+  <text x="866" y="258" class="step ink">ASYNC CONTROL</text>
+  <text x="836" y="302" class="card-title ink">Queue and Route</text>
+  <text x="836" y="327" class="card-sub muted">Long-running GPU jobs</text>
+  <line x1="836" y1="346" x2="996" y2="346" class="divider"/>
+  <text x="836" y="383" class="body-bold ink">Redis + RQ</text>
+  <text x="836" y="408" class="body muted">Queued job state</text>
+  <text x="836" y="449" class="body-bold ink">GPU worker</text>
+  <text x="836" y="474" class="body muted">One controlled execution path</text>
+  <text x="836" y="515" class="body-bold ink">Task router</text>
+  <text x="836" y="540" class="body muted">Selects permitted workflow</text>
+  <text x="836" y="581" class="body-bold ink">Model registry</text>
+  <text x="836" y="606" class="body muted">Versions and health</text>
+  <rect x="836" y="628" width="160" height="28" rx="14" class="soft"/>
+  <text x="916" y="647" text-anchor="middle" class="small-bold ink">No free-form agent</text>
+
+  <!-- Step 5 -->
+  <g filter="url(#shadow)">
+    <rect x="1048" y="218" width="390" height="460" rx="16" class="card"/>
+  </g>
+  <rect x="1048" y="218" width="390" height="7" rx="3" fill="#111111"/>
+  <circle cx="1076" cy="254" r="15" fill="#111111"/>
+  <text x="1076" y="259" text-anchor="middle" font-family="Arial" font-size="12" font-weight="700" fill="#FFFFFF">5</text>
+  <text x="1100" y="258" class="step ink">SPECIALIST EXECUTION</text>
+  <text x="1070" y="302" class="card-title ink">Per-Model Adapters and AI</text>
+  <text x="1070" y="327" class="card-sub muted">Each model receives different inputs</text>
+
+  <rect x="1070" y="358" width="346" height="86" rx="12" class="model-adapted"/>
+  <text x="1090" y="383" class="body-bold ink">SatVLM adapter -> Qwen2.5-VL-7B + QLoRA</text>
+  <text x="1090" y="407" class="small muted">RGB or false-colour, SAR rendering, tiles and token limits</text>
+  <text x="1090" y="428" class="small muted">VQA, scene description and verified answer composition</text>
+
+  <rect x="1070" y="458" width="346" height="86" rx="12" class="model-reused"/>
+  <text x="1090" y="483" class="body-bold ink">Change adapter -> ChangeFormer V6</text>
+  <text x="1090" y="507" class="small muted">Common grid, paired tiles and checkpoint normalization</text>
+  <text x="1090" y="528" class="small muted">Binary change mask, regions, count, location and area</text>
+
+  <rect x="1070" y="558" width="346" height="98" rx="12" class="model-built"/>
+  <text x="1090" y="583" class="body-bold ink">Optical-SAR adapter -> SAR-FuseSeg</text>
+  <text x="1090" y="607" class="small muted">Band map, VV/VH calibration, common grid and normalization</text>
+  <text x="1090" y="628" class="small muted">Team model: built-up, water, vegetation and other masks</text>
+  <text x="1090" y="649" class="small muted">Optical-only, SAR-only and fused comparison</text>
+
+  <!-- Step 6 -->
+  <g filter="url(#shadow)">
+    <rect x="1468" y="218" width="290" height="460" rx="16" class="card"/>
+  </g>
+  <rect x="1468" y="218" width="290" height="7" rx="3" fill="#111111"/>
+  <circle cx="1496" cy="254" r="15" fill="#111111"/>
+  <text x="1496" y="259" text-anchor="middle" font-family="Arial" font-size="12" font-weight="700" fill="#FFFFFF">6</text>
+  <text x="1520" y="258" class="step ink">EVIDENCE DELIVERY</text>
+  <text x="1490" y="302" class="card-title ink">Verify and Explain</text>
+  <text x="1490" y="327" class="card-sub muted">Evidence before language</text>
+  <line x1="1490" y1="346" x2="1736" y2="346" class="divider"/>
+  <text x="1490" y="383" class="body-bold ink">Evidence engine</text>
+  <text x="1490" y="408" class="body muted">Masks, polygons and measurements</text>
+  <text x="1490" y="449" class="body-bold ink">Confidence policy</text>
+  <text x="1490" y="474" class="body muted">Per-model values, never raw averages</text>
+  <text x="1490" y="515" class="body-bold ink">Claim validator</text>
+  <text x="1490" y="540" class="body muted">Answer uses verified facts only</text>
+  <text x="1490" y="581" class="body-bold ink">Web-ready output</text>
+  <text x="1490" y="606" class="body muted">PNG overlay, GeoJSON and report</text>
+  <rect x="1490" y="628" width="246" height="28" rx="14" class="soft"/>
+  <text x="1613" y="647" text-anchor="middle" class="small-bold ink">Accept | Warn | Abstain</text>
+
+  <!-- Request arrows -->
+  <path d="M252 448 H282" class="line"/>
+  <path d="M502 448 H532" class="line"/>
+  <path d="M784 448 H814" class="line"/>
+  <path d="M1018 448 H1048" class="line"/>
+  <path d="M1438 448 H1468" class="line"/>
+
+  <!-- Result loop -->
+  <path d="M1613 678 V716 H146 V678" class="line-muted"/>
+  <rect x="693" y="700" width="420" height="31" rx="15" class="soft"/>
+  <text x="903" y="720" text-anchor="middle" class="small-bold ink">Status, clarification, answer, overlay, confidence and report</text>
+
+  <!-- Shared systems lane -->
+  <text x="52" y="778" class="lane-title ink">SHARED SYSTEMS AND GOVERNANCE</text>
+
+  <rect x="42" y="801" width="520" height="163" rx="15" class="card"/>
+  <text x="64" y="835" class="card-title ink">System of Record</text>
+  <line x1="64" y1="850" x2="540" y2="850" class="divider"/>
+  <text x="64" y="881" class="body-bold ink">SQLite metadata</text>
+  <text x="64" y="904" class="body muted">Uploads, jobs, stages, warnings</text>
+  <text x="64" y="924" class="body muted">and result references</text>
+  <text x="300" y="881" class="body-bold ink">Artifact storage</text>
+  <text x="300" y="904" class="body muted">Original rasters, PNG masks,</text>
+  <text x="300" y="924" class="body muted">GeoJSON and reports</text>
+  <text x="64" y="949" class="small muted">Every artifact stores dataset, preprocessing, model, calibration, threshold and code versions.</text>
+
+  <rect x="588" y="801" width="346" height="163" rx="15" class="card"/>
+  <text x="610" y="835" class="card-title ink">Deployment</text>
+  <line x1="610" y1="850" x2="912" y2="850" class="divider"/>
+  <text x="610" y="881" class="body-bold ink">Docker Compose</text>
+  <text x="610" y="904" class="body muted">frontend + api + redis + worker</text>
+  <text x="610" y="934" class="body-bold ink">Offline-first demo</text>
+  <text x="610" y="957" class="small muted">Cached weights, examples and dependencies</text>
+
+  <rect x="960" y="801" width="798" height="163" rx="15" class="card"/>
+  <text x="982" y="835" class="card-title ink">Model and Data Governance</text>
+  <line x1="982" y1="850" x2="1736" y2="850" class="divider"/>
+  <text x="982" y="881" class="body-bold ink">Training and adaptation</text>
+  <text x="982" y="904" class="body muted">BigEarthNet.txt | BigEarthNet v2 | DFC2020 or SEN12MS</text>
+  <text x="982" y="924" class="small muted">Optional ChangeFormer adaptation: LEVIR-CD or DSIFN-CD</text>
+  <text x="982" y="947" class="body-bold ink">Evaluation-only vault</text>
+  <text x="1137" y="947" class="body muted">VRSBench | RSVQA | CDVQA | hidden ISRO or SAC data</text>
+  <rect x="1480" y="869" width="256" height="55" rx="12" class="soft"/>
+  <text x="1608" y="893" text-anchor="middle" class="small-bold ink">NO TRAINING OR TUNING</text>
+  <text x="1608" y="912" text-anchor="middle" class="small muted">No threshold calibration</text>
+
+  <!-- bottom principle -->
+  <rect x="42" y="987" width="1716" height="43" rx="12" class="soft"/>
+  <text x="64" y="1014" class="small-bold ink">CORE PRINCIPLE</text>
+  <text x="190" y="1014" class="body ink">Specialists create evidence. SatVLM converts only verified facts into natural language. The system abstains when required evidence is missing.</text>
+</svg>

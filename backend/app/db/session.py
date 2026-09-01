@@ -80,6 +80,11 @@ def get_session_factory(url: str | None = None) -> sessionmaker[Session]:
 
 def init_db(url: str | None = None) -> None:
     """Create every table that does not exist yet. Safe to call repeatedly."""
+    # Register every mapped table before reading ``Base.metadata``. Importing this
+    # module directly (CLI/bootstrap scripts) must be as reliable as importing the
+    # full FastAPI route graph first.
+    from app.db import models as _models  # noqa: F401
+
     engine = get_engine(url)
     Base.metadata.create_all(bind=engine)
 

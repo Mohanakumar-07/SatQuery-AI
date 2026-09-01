@@ -232,15 +232,26 @@ def set_clarification(session: Session, analysis: Analysis, payload: dict[str, A
     )
 
 
-def list_events(session: Session, analysis_id: str, *, after: datetime | None = None, limit: int = 100) -> list[AnalysisEvent]:
+def list_events(
+    session: Session,
+    analysis_id: str,
+    *,
+    after: datetime | None = None,
+    limit: int = 100,
+    newest: bool = False,
+) -> list[AnalysisEvent]:
     conditions = [AnalysisEvent.analysis_id == analysis_id]
     if after is not None:
         conditions.append(AnalysisEvent.at > after)
-    return list(
-        session.scalars(
-            select(AnalysisEvent).where(*conditions).order_by(AnalysisEvent.at.asc(), AnalysisEvent.id.asc()).limit(limit)
-        )
+    ordering = (
+        (AnalysisEvent.at.desc(), AnalysisEvent.id.desc())
+        if newest
+        else (AnalysisEvent.at.asc(), AnalysisEvent.id.asc())
     )
+    rows = list(
+        session.scalars(select(AnalysisEvent).where(*conditions).order_by(*ordering).limit(limit))
+    )
+    return list(reversed(rows)) if newest else rows
 
 
 # ---------------------------------------------------------------- artifacts
@@ -248,6 +259,15 @@ def list_events(session: Session, analysis_id: str, *, after: datetime | None = 
 
 def register_artifact(session: Session, artifact: Artifact) -> Artifact:
     session.add(artifact)
+    session.flush()
+    return artifact
+
+
+def update_artifact(session: Session, artifact: Artifact, **values: Any) -> Artifact:
+    """Refresh a registered artifact while preserving its stable identifier."""
+    for key, value in values.items():
+        if hasattr(artifact, key):
+            setattr(artifact, key, value)
     session.flush()
     return artifact
 

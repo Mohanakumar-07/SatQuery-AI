@@ -38,6 +38,7 @@ class ErrorCode(str, Enum):
     PIPELINE_NOT_ATTACHED = "PIPELINE_NOT_ATTACHED"
     PIPELINE_FAILED = "PIPELINE_FAILED"
     QUEUE_UNAVAILABLE = "QUEUE_UNAVAILABLE"
+    REPORT_FORMAT_UNAVAILABLE = "REPORT_FORMAT_UNAVAILABLE"
     ABSTAINED = "ABSTAINED"
     NOT_FOUND = "NOT_FOUND"
     CONFLICT = "CONFLICT"
@@ -174,3 +175,9 @@ class QueueUnavailable(AppError):
     status_code = 503
     code = ErrorCode.QUEUE_UNAVAILABLE
     default_message = "The background job queue is not reachable."
+
+
+class ReportFormatUnavailable(AppError):
+    status_code = 501
+    code = ErrorCode.REPORT_FORMAT_UNAVAILABLE
+    default_message = "The requested report format is not available on this installation."

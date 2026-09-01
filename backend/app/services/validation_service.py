@@ -522,7 +522,7 @@ class ValidationService:
                     f"Resolutions differ by a factor of {ratio_value}; the common grid will resample the "
                     "finer image to the coarser one."
                     if ratio_value > 3.0
-                    else None,
+                    else None
                 ),
             )
         )

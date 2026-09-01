@@ -73,14 +73,29 @@ class EvidenceService:
         A pipeline may name an artifact (``change-mask.png``) or reference it by
         ``artifact_id``; the client must only ever see an endpoint the API serves.
         """
+        served_urls = set(artifact_urls.values())
+
         def resolve(value: Any) -> str | None:
             if not isinstance(value, dict):
                 return None
-            for key in ("artifact_id", "name", "filename"):
+            for key in ("artifact_id", "name", "filename", "url"):
                 token = value.get(key)
                 if token and str(token) in artifact_urls:
                     return artifact_urls[str(token)]
+                if token and str(token) in served_urls:
+                    return str(token)
             return None
+
+        def warn_unregistered(kind: str) -> None:
+            warnings = list(payload.get("warnings") or [])
+            warnings.append(
+                {
+                    "code": "ARTIFACT_NOT_REGISTERED",
+                    "level": "error",
+                    "message": f"The pipeline referenced an unregistered {kind} artifact, so its URL was removed.",
+                }
+            )
+            payload["warnings"] = warnings
 
         overlay = payload.get("overlay")
         if isinstance(overlay, dict):
@@ -88,6 +103,16 @@ class EvidenceService:
             if url:
                 overlay = {**overlay, "url": url}
                 payload["overlay"] = overlay
+            else:
+                payload["overlay"] = None
+                warn_unregistered("overlay")
+        existing_geojson = payload.get("geojson_url")
+        if existing_geojson and existing_geojson not in served_urls:
+            if str(existing_geojson) in artifact_urls:
+                payload["geojson_url"] = artifact_urls[str(existing_geojson)]
+            else:
+                payload["geojson_url"] = None
+                warn_unregistered("GeoJSON")
         if not payload.get("geojson_url"):
             for key in ("geojson", "regions_geojson", "geojson_name", "geojson_artifact_id"):
                 token = payload.get(key)

@@ -25,7 +25,9 @@ from app.db.repo import (
     get_analysis,
     list_artifacts,
     register_artifact,
+    update_artifact,
 )
+from app.geospatial.crs import select_measurement_crs
 from app.geospatial.overlap import relative_location
 from app.schemas.analyses import AnalysisResult, ArtifactLink, InputInterpretation, PipelineInfo
 from app.schemas.common import (
@@ -97,7 +99,9 @@ class ResultService:
             source_path = item.get("path")
             data = item.get("data")
             if source_path:
-                shutil.copyfile(Path(source_path), target)
+                source = Path(source_path).resolve()
+                if source != target.resolve():
+                    shutil.copyfile(source, target)
             elif data is not None:
                 target.write_bytes(data if isinstance(data, bytes) else str(data).encode("utf-8"))
             elif existing:
@@ -127,27 +131,31 @@ class ResultService:
                     "synthetic": bool(item.get("synthetic", default_synthetic)),
                 }
             )
-            artifact = Artifact(
-                id=artifact_id,
-                analysis_id=analysis_id,
-                name=name,
-                kind=kind,
-                relative_path=payload["relative_path"],
-                media_type=payload["media_type"],
-                size_bytes=payload["size_bytes"],
-                sha256=payload["sha256"],
-                source=payload.get("source"),
-                bounds=payload["bounds"],
-                crs=payload.get("crs"),
-                synthetic=payload["synthetic"],
-                meta={
+            artifact_values = {
+                "name": name,
+                "kind": kind,
+                "relative_path": payload["relative_path"],
+                "media_type": payload["media_type"],
+                "size_bytes": payload["size_bytes"],
+                "sha256": payload["sha256"],
+                "source": payload.get("source"),
+                "bounds": payload["bounds"],
+                "crs": payload.get("crs"),
+                "synthetic": payload["synthetic"],
+                "meta": {
                     key: value
                     for key, value in item.items()
                     if key in {"model", "preprocessing_version", "bands", "class_map_version", "tile", "description"}
                 }
                 or None,
-            )
-            register_artifact(session, artifact)
+            }
+            if existing:
+                update_artifact(session, existing, **artifact_values)
+            else:
+                register_artifact(
+                    session,
+                    Artifact(id=artifact_id, analysis_id=analysis_id, **artifact_values),
+                )
             urls[name] = url
             urls[artifact_id] = url
         return urls
@@ -192,10 +200,17 @@ class ResultService:
             raw_warnings.extend(self.evidence.check_overlay_shape(evidence))
 
         routing = analysis.routing or {}
+        evidence_payload = evidence.model_dump(mode="json") if evidence else {}
+        confidence_context = {
+            **evidence_payload,
+            "evidence": evidence_payload,
+            "answer": outcome.get("answer"),
+            "models": outcome.get("models") or routing.get("models") or [],
+        }
         confidence = self.confidence.evaluate(
             task=analysis.task,
             specialists=list(outcome.get("specialists") or []),
-            evidence=evidence,
+            evidence=confidence_context,
             extra_warnings=[
                 Warning.model_validate(item) if isinstance(item, dict) else item
                 for item in (outcome.get("confidence_warnings") or [])
@@ -375,7 +390,15 @@ def _measurement_crs(validation: dict[str, Any]) -> str | None:
         metadata = (report or {}).get("metadata") or {}
         if metadata.get("measurement_crs"):
             return str(metadata["measurement_crs"])
-    return None
+    source_crs = validation.get("crs")
+    bounds = None
+    for report in validation.get("files") or []:
+        metadata = (report or {}).get("metadata") or {}
+        if metadata.get("bounds"):
+            bounds = metadata["bounds"]
+            break
+    selection = select_measurement_crs(source_crs, bounds, source_crs)
+    return selection.get("measurement_crs")
 
 
 def _validation_snapshot(payload: dict[str, Any]) -> dict[str, Any]:
@@ -478,7 +501,13 @@ def _kind_from_name(name: str) -> str:
 
 
 def _storage_kind(artifact_kind: str) -> str:
-    return "geojson" if artifact_kind in {"vector", "geojson"} else ("reports" if artifact_kind == "report" else "masks")
+    if artifact_kind in {"vector", "geojson"}:
+        return "geojson"
+    if artifact_kind == "report":
+        return "reports"
+    if artifact_kind == "scene":
+        return "scenes"
+    return "masks"
 
 
 def _sha256(path: Path) -> str:

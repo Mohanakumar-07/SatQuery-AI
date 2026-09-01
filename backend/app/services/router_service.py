@@ -17,7 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.core.config import Settings, get_settings
+from app.core.config import PipelineMode, Settings, get_settings
 from app.schemas.common import (
     ClarificationField,
     FileRole,
@@ -100,6 +100,7 @@ class RoutingDecision:
             "rejection": self.rejection,
             "geographic_claims_allowed": self.geographic_claims_allowed,
             "warnings": [warning.model_dump() for warning in self.warnings],
+            "trace": list(self.trace),
         }
 
 
@@ -295,11 +296,31 @@ class RouterService:
             decision.trace.append("no_permitted_models")
             return
 
-        required = [model for model in permitted if model.role in {"primary_specialist", "evidence_interpreter"}]
+        specialists = [model for model in permitted if model.role == "primary_specialist"]
+        interpreters = [model for model in permitted if model.role == "evidence_interpreter"]
         composition = [model for model in permitted if model.role == "answer_composition"]
 
+        # In unattached/stub modes the registry describes the workflow that would run,
+        # but no model is claimed as executed. Unattached reaches the pipeline seam and
+        # fails with PIPELINE_NOT_ATTACHED; stub completes with an explicit disclaimer.
+        if self.settings.pipeline_mode is not PipelineMode.PYTHON:
+            decision.specialist_names = [model.internal_name for model in [*specialists, *interpreters]]
+            decision.composition_fallback = True
+            decision.trace.append(f"pipeline_mode_{self.settings.pipeline_mode.value}")
+            decision.warnings.append(
+                Warning(
+                    code="NON_AUTHORITATIVE_PIPELINE_MODE",
+                    level=WarningLevel.WARNING,
+                    message=(
+                        "The selected workflow is for API integration only; no specialist model "
+                        f"is executed while pipeline mode is '{self.settings.pipeline_mode.value}'."
+                    ),
+                )
+            )
+            return
+
         missing_required: list[ModelInfo] = []
-        for model in required:
+        for model in specialists:
             status, _ = self.registry.probe(model)
             if status != "available":
                 missing_required.append(model)
@@ -334,7 +355,7 @@ class RouterService:
             )
             decision.trace.append("template_answer_composition")
 
-        for model in required:
+        for model in [*specialists, *interpreters]:
             decision.specialist_names.append(model.internal_name)
             decision.models.append(
                 ModelRef(name=model.model_name, version=model.version, internal_name=model.internal_name, role=model.role)
