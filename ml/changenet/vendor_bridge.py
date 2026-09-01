@@ -53,7 +53,11 @@ def load_changeformer_v6(checkpoint_path: str, device: str | None = None) -> Loa
         embed_dim=EMBED_DIM,
     )
 
-    checkpoint = torch.load(checkpoint_path, map_location=resolved_device)
+    # weights_only=False: PyTorch >=2.6 defaults to True, which rejects this checkpoint's
+    # numpy scalar metadata (best_val_acc/best_epoch_id). Safe here because the file was
+    # downloaded directly from the official GitHub release (docs/ml/changeformer_licence.md),
+    # not from an untrusted/user-supplied source.
+    checkpoint = torch.load(checkpoint_path, map_location=resolved_device, weights_only=False)
     state_dict = checkpoint["model_G_state_dict"] if "model_G_state_dict" in checkpoint else checkpoint
     net.load_state_dict(state_dict)
     net.to(resolved_device)
