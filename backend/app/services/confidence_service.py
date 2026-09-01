@@ -153,7 +153,24 @@ class ConfidenceService:
                 )
             )
 
-        scored = [(specialist, specialist.governing_score) for specialist in normalised]
+        uncalibrated = [
+            specialist.source
+            for specialist in normalised
+            if not specialist.calibrated and specialist.governing_score is not None
+        ]
+        if uncalibrated:
+            warnings.append(
+                Warning(
+                    code="UNCALIBRATED_SPECIALIST_SCORE",
+                    level=WarningLevel.WARNING,
+                    message="Uncalibrated specialist scores were retained for audit but not used for acceptance.",
+                    detail={"sources": uncalibrated},
+                )
+            )
+        scored = [
+            (specialist, specialist.governing_score if specialist.calibrated else None)
+            for specialist in normalised
+        ]
         usable = [(specialist, value) for specialist, value in scored if value is not None]
 
         if not usable:
@@ -288,8 +305,6 @@ def _truthy(value: Any) -> bool:
     if value is None:
         return False
     if isinstance(value, (list, dict, str)) and len(value) == 0:
-        return False
-    if isinstance(value, (int, float)) and value == 0:
         return False
     return True
 

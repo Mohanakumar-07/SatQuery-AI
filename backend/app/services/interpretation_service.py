@@ -50,10 +50,6 @@ class InterpretationResult:
     def needs_clarification(self) -> bool:
         return bool(self.missing_fields)
 
-    @property
-    def georeferenced(self) -> bool:
-        return bool(self.dates) or True  # placeholder, replaced by validation
-
     def to_dict(self) -> dict[str, Any]:
         return {
             "detected_input_type": self.input_type.value if self.input_type else None,
@@ -153,20 +149,39 @@ def _apply_supplied_roles(uploads: list[Upload], hints: AnalysisHints, result: I
         return False
 
     roles = dict(hints.file_roles)
-    wanted = {FileRole.BEFORE.value, FileRole.AFTER.value} | {FileRole.OPTICAL.value, FileRole.SAR.value}
+    wanted = {
+        FileRole.BEFORE.value,
+        FileRole.AFTER.value,
+        FileRole.OPTICAL.value,
+        FileRole.SAR.value,
+        FileRole.SINGLE.value,
+    }
     values = {role.value for role in roles.values()}
     if values and not values <= wanted:
         result.rationale.append(f"Roles {sorted(values - wanted)} are not part of the MVP vocabulary.")
         return False
 
+    if set(roles) != known:
+        result.rationale.append("Explicit roles must cover every uploaded file.")
+        return False
+    if len(uploads) == 1 and values != {FileRole.SINGLE.value}:
+        result.rationale.append("A one-file request must use the 'single' role.")
+        return False
+    if len(uploads) == 2 and values not in (
+        {FileRole.BEFORE.value, FileRole.AFTER.value},
+        {FileRole.OPTICAL.value, FileRole.SAR.value},
+    ):
+        result.rationale.append("A pair needs exactly before/after or optical/SAR roles.")
+        return False
+
     result.file_roles = roles
     result.certainty = 0.98
     result.rationale.append("File roles were supplied explicitly by the client.")
-    if values & {FileRole.BEFORE.value, FileRole.AFTER.value}:
+    if values == {FileRole.BEFORE.value, FileRole.AFTER.value}:
         result.input_type = InputType.BI_TEMPORAL
-    elif values & {FileRole.OPTICAL.value, FileRole.SAR.value}:
+    elif values == {FileRole.OPTICAL.value, FileRole.SAR.value}:
         result.input_type = InputType.OPTICAL_SAR
-    elif FileRole.SINGLE in values:
+    elif values == {FileRole.SINGLE.value}:
         result.input_type = InputType.SINGLE_IMAGE
     return result.input_type is not None
 
@@ -299,7 +314,6 @@ def _interpret_pair(
                 result.file_roles[second.id] = FileRole.AFTER
                 result.missing_fields = []
                 result.certainty = 0.7
-                result.rationale.remove("Which file is the earlier image?")
                 result.rationale.append(
                     "No acquisition dates in the files; temporal order taken from the hint dates "
                     "combined with upload order."

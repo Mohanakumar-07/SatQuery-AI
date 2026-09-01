@@ -127,6 +127,11 @@ class ArtifactLink(ResponseModel):
     sha256: str | None = None
 
 
+class ArtifactListResponse(ResponseModel):
+    items: list[ArtifactLink] = Field(default_factory=list)
+    total: int = 0
+
+
 class AnalysisCreated(ResponseModel):
     """``202`` body returned straight after enqueueing (plan section 7.0)."""
 
@@ -228,6 +233,40 @@ class AnalysisListResponse(ResponseModel):
     total: int
     limit: int
     offset: int
+
+
+class AnalysisDetailResponse(ResponseModel):
+    """Stored request, interpretation and live state for one analysis."""
+
+    analysis_id: str
+    question: str
+    upload_ids: list[str] = Field(default_factory=list)
+    file_roles: dict[str, FileRole] = Field(default_factory=dict)
+    status: AnalysisStatus
+    stage: Stage | None = None
+    progress: int = 0
+    message: str | None = None
+    input_type: InputType | str | None = None
+    modalities: list[Modality | str] = Field(default_factory=list)
+    task: Task | str | None = None
+    intent: Intent | str | None = None
+    validation: dict[str, Any] | None = None
+    routing: dict[str, Any] | None = None
+    clarification: ClarificationPayload | None = None
+    queue_backend: str | None = None
+    queue_job_id: str | None = None
+    pipeline_mode: str | None = None
+    worker: str | None = None
+    attempts: int = 0
+    warnings: list[Warning] = Field(default_factory=list)
+    execution_trace: list[str] = Field(default_factory=list)
+    error: ErrorPayload | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    duration_seconds: float | None = None
+    links: dict[str, str] = Field(default_factory=dict)
 
 
 class ClarificationResponse(RequestModel):

@@ -12,8 +12,8 @@ name: satquery
 services:
   api:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     image: satquery-api:dev
     env_file:
       - path: .env
@@ -31,7 +31,7 @@ services:
     volumes:
       - ./artifacts:/app/artifacts
       - ./var:/app/var
-      - ./backend/app:/app/app:ro
+      - ./backend/app:/app/backend/app:ro
     depends_on:
       redis:
         condition: service_started
@@ -41,8 +41,8 @@ services:
   # Build with the model stack attached and deploy on the GPU host.
   worker:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     image: satquery-api:dev
     env_file:
       - path: .env
@@ -58,7 +58,7 @@ services:
     volumes:
       - ./artifacts:/app/artifacts
       - ./var:/app/var
-      - ./backend/app:/app/app:ro
+      - ./backend/app:/app/backend/app:ro
       - ./ml:/app/ml:ro
     depends_on:
       redis:

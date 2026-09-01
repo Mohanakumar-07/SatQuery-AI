@@ -127,6 +127,22 @@ def _resolve(path: Path) -> Path:
     return path.resolve()
 
 
+def _database_url(value: str) -> str:
+    """Normalise PostgreSQL for Psycopg 3 or resolve a repo-relative SQLite URL."""
+    if value.startswith("postgres://"):
+        return f"postgresql+psycopg://{value[len('postgres://') :]}"
+    if value.startswith("postgresql://"):
+        return f"postgresql+psycopg://{value[len('postgresql://') :]}"
+    prefix = "sqlite:///"
+    if not value.startswith(prefix):
+        return value
+    raw = value[len(prefix) :]
+    if not raw or raw == ":memory:" or raw.startswith("/") or Path(raw).is_absolute():
+        return value
+    absolute = (_repo_root() / raw).resolve().as_posix()
+    return f"{prefix}{absolute}"
+
+
 @dataclass(frozen=True)
 class Settings:
     """Immutable snapshot of the backend environment."""
@@ -269,9 +285,18 @@ def _redact_database_url(url: str) -> str:
 def build_settings() -> Settings:
     """Read ``.env`` (if any) and build an immutable settings snapshot."""
     env_present = load_dotenv()
-    origins = _str("SATQUERY_CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
+    origins = _str(
+        "SATQUERY_CORS_ORIGINS",
+        "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001,http://localhost:5173,http://127.0.0.1:5173",
+    )
     cors = tuple(o.strip() for o in origins.split(",") if o.strip())
     extensions = _str("SATQUERY_ALLOWED_EXTENSIONS", "tif,tiff,gtif,png,jpg,jpeg")
+    database_url = (
+        os.environ.get("SATQUERY_DATABASE_URL")
+        or os.environ.get("DATABASE_URL_POOLED")
+        or os.environ.get("DATABASE_URL")
+        or "sqlite:///var/satquery.db"
+    )
 
     settings = Settings(
         app_name=_str("SATQUERY_APP_NAME", "SatQuery AI API"),
@@ -283,7 +308,7 @@ def build_settings() -> Settings:
         repo_root=_repo_root(),
         artifacts_dir=_resolve(_path("SATQUERY_ARTIFACTS_DIR", "artifacts")),
         state_dir=_resolve(_path("SATQUERY_STATE_DIR", "var")),
-        database_url=_str("SATQUERY_DATABASE_URL", "sqlite:///var/satquery.db"),
+        database_url=_database_url(database_url),
         allowed_extensions=frozenset(e.strip().lower().lstrip(".") for e in extensions.split(",") if e.strip()),
         max_upload_bytes=_int("SATQUERY_MAX_UPLOAD_BYTES", 500 * 1024 * 1024),
         max_decompressed_bytes=_int("SATQUERY_MAX_DECOMPRESSED_BYTES", 2 * 1024 * 1024 * 1024),

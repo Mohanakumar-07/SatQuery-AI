@@ -5,7 +5,8 @@ FROM python:3.11-slim
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=1
+    PIP_NO_CACHE_DIR=1 \
+    PYTHONPATH=/app:/app/backend
 
 WORKDIR /app
 
@@ -17,8 +18,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY backend/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# App package + config + tests. Repo root files (.env) are mounted, never baked.
-COPY backend/ ./
+# Preserve the repository's backend/ layout so repo-relative registry and policy
+# paths resolve identically in the API and worker containers.
+COPY backend/ ./backend/
+
+WORKDIR /app/backend
 
 RUN mkdir -p /app/artifacts/uploads /app/artifacts/masks /app/artifacts/geojson \
              /app/artifacts/reports /app/artifacts/checkpoints /app/var
