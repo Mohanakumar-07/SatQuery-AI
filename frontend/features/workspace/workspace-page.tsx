@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { AlertTriangle, ArrowUp, Check, ChevronRight, FileImage, History, ImagePlus, LoaderCircle, Orbit, Paperclip, Plus, RotateCcw, Satellite, X } from 'lucide-react';
 
 import { SiteHeader } from '@/components/site/site-header';
+import { SatIcon } from '@/components/site/sat-icon';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useAnalysis } from '@/hooks/use-analysis';
@@ -189,7 +190,7 @@ export function WorkspacePage() {
         <div className={`chat-thread ${conversationStarted ? 'has-conversation' : ''}`}>
           {!conversationStarted ? (
             <div className="chat-empty-state">
-              <div className="chat-mark" aria-hidden="true"><Orbit /></div><span>SatQuery workspace</span><h1>What do you want to understand?</h1>
+              <div className="chat-mark" aria-hidden="true"><SatIcon /></div><span>SatQuery workspace</span><h1>What do you want to understand?</h1>
               <p>Attach satellite imagery, then ask a clear question about the scene.</p>
               <div className="chat-empty-actions"><button onClick={() => fileInput.current?.click()}><ImagePlus aria-hidden="true" />Upload imagery</button><button onClick={() => setQuery('Where has the built-up area changed between these dates?')}><RotateCcw aria-hidden="true" />Use sample question</button></div>
               <div className="chat-suggestions" aria-label="Suggested questions">{suggestions.map((suggestion) => <button key={suggestion} onClick={() => setQuery(suggestion)}>{suggestion}<ChevronRight aria-hidden="true" /></button>)}</div>
@@ -198,7 +199,7 @@ export function WorkspacePage() {
             <div className="chat-messages">
               <article className="chat-message chat-message-user"><div className="chat-message-label">You</div><div className="chat-user-bubble"><p>{submittedQuery}</p><div className="chat-inline-files">{files.map((file) => <span key={file.id}><FileImage aria-hidden="true" /><span>{file.name}<small>{file.size}</small></span></span>)}</div></div></article>
               <article className="chat-message chat-message-assistant" aria-live="polite">
-                <div className="chat-assistant-avatar" aria-hidden="true"><Satellite /></div>
+                <div className="chat-assistant-avatar" aria-hidden="true"><SatIcon /></div>
                 <div className="chat-assistant-content">
                   {stage === 'complete' ? (
                     <div className="chat-analysis-ready"><span className="ready-label"><Check />Analysis complete</span><h2>Your evidence package is ready.</h2><p>The response contains the backend result, spatial artifacts, separate specialist confidence, warnings, and execution trace.</p><div className="chat-result-summary"><div><span>Route</span><strong>{analysisStatus?.task?.replaceAll('_', ' ') ?? inputMode}</strong></div><div><span>Evidence ID</span><strong>{analysisId}</strong></div></div><Link href={`/analysis/${analysisId}`}>Open evidence <ChevronRight aria-hidden="true" /></Link></div>

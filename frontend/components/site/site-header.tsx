@@ -1,6 +1,7 @@
 import Link from 'next/link';
-import { ArrowLeft, ArrowUpRight, History, Satellite } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, History } from 'lucide-react';
 
+import { SatIcon } from '@/components/site/sat-icon';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -14,7 +15,7 @@ export function SiteHeader({ mode = 'landing', backHref, backLabel }: SiteHeader
   return (
     <header className={cn('site-header', mode === 'app' && 'app-site-header')}>
       <Link href="/" className="wordmark" aria-label="SatQuery AI home">
-        <span className="wordmark-mark"><Satellite aria-hidden="true" /></span>
+        <span className="wordmark-mark"><SatIcon aria-hidden="true" /></span>
         <span>SATQUERY</span>
         <span className="wordmark-ai">AI</span>
       </Link>

@@ -25,15 +25,17 @@ var/
 *.sqlite3
 
 # Stored uploads, masks, overlays, reports and checkpoints are runtime data.
-artifacts/uploads/*
-artifacts/masks/*
-artifacts/geojson/*
-artifacts/reports/*
-artifacts/checkpoints/*
+artifacts/uploads/**
+artifacts/masks/**
+artifacts/geojson/**
+artifacts/reports/**
+artifacts/scenes/**
+artifacts/checkpoints/**
 !artifacts/uploads/.gitkeep
 !artifacts/masks/.gitkeep
 !artifacts/geojson/.gitkeep
 !artifacts/reports/.gitkeep
+!artifacts/scenes/.gitkeep
 !artifacts/checkpoints/.gitkeep
 
 # ---- Secrets / local env ----

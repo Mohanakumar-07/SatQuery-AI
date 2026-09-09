@@ -43,11 +43,23 @@ export const metadata: Metadata = {
     description: 'Evidence-backed satellite image analysis.',
     images: ['/og.png'],
   },
+  icons: {
+    icon: [
+      { url: '/SatQuery-Icon.svg', type: 'image/svg+xml' },
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+    ],
+    shortcut: '/SatQuery-Icon.svg',
+    apple: '/SatQuery-Icon.svg',
+  },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className="dark">
+      <head>
+        <link rel="icon" href="/SatQuery-Icon.svg" type="image/svg+xml" />
+        <link rel="alternate icon" href="/favicon.svg" type="image/svg+xml" />
+      </head>
       <body className={`${display.variable} ${body.variable} ${mono.variable}`}>
         <LenisProvider>{children}</LenisProvider>
       </body>
