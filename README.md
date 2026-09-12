@@ -416,29 +416,6 @@ flowchart TD
 
 ---
 
-## Actual Built Stack & Technologies
-
-| Layer | Technology | Version | Purpose in SatQuery AI |
-| :--- | :--- | :--- | :--- |
-| **Orchestration** | LangGraph | 0.2.70+ | Stateful StateGraph execution, HITL interrupt/resume, checkpointer |
-| **Deep Learning** | PyTorch | 2.11.0+cu128 | Specialist model execution on NVIDIA RTX GPUs |
-| **Acceleration** | NVIDIA CUDA | 12.8 | Hardware GPU tensor computation |
-| **Computer Vision** | Torchvision / Timm | 0.20+ / 1.0+ | Backbone neural architectures (ResNet-18 dual encoders) |
-| **Geospatial Processing** | Rasterio | 1.4.3 | GeoTIFF I/O, band extraction, affine transforms, polygonization |
-| **Geospatial Projections** | Pyproj | 3.7.1 | Dynamic CRS reprojection into local UTM zones for ground metrics |
-| **Geometric Operations** | Shapely | 2.0.7 | Polygon simplification, topological validation, multipolygon union |
-| **Backend Framework** | FastAPI | 0.115.11 | High-throughput async REST API control plane |
-| **ASGI Server** | Uvicorn | 0.34.0 | Production HTTP/WebSocket application server |
-| **Database & ORM** | SQLAlchemy | 2.0.38 | Relational metadata store, execution bookkeeping, query caching |
-| **Database Engines** | SQLite / PostgreSQL | 3.45+ / Psycopg 3 | Local development database (`var/satquery.db`) & pooled Postgres |
-| **Report Generation** | ReportLab | 5.0.1 | Binary PDF generation conforming to the evidence schema contract |
-| **Frontend Framework** | React / Next.js (Vinext) | 19.2.6 / Vite 8 | Reactive web application, routing, and SSR |
-| **Styling** | Tailwind CSS | 4.2.1 | Modern design system, responsive layouts |
-| **UI Primitives** | Base UI / Lucide | 1.7.0 / 1.31.0 | Accessible UI controls, modal dialogues, icons |
-| **Testing** | Pytest | 9.1.1 | 56 automated unit, regression, and integration tests |
-
----
-
 ## Repository Structure (Core Main Pipeline)
 
 ```
