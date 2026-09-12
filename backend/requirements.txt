@@ -26,3 +26,8 @@ numpy>=1.24,<3.0
 
 # JSON serialisation for large result payloads
 orjson>=3.9
+
+# Stateful agentic workflow orchestration & conversation checkpointing
+langgraph>=0.2.0
+langchain-core>=0.3.0
+langgraph-checkpoint-sqlite>=2.0.0

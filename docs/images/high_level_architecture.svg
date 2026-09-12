@@ -1,0 +1,168 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 860" width="100%" height="100%" style="background:#090d12; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+  <defs>
+    <!-- Gradients -->
+    <linearGradient id="headerGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1f2937"/>
+      <stop offset="100%" stop-color="#111827"/>
+    </linearGradient>
+    <linearGradient id="clientGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="apiGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0c2d48"/>
+      <stop offset="100%" stop-color="#05192d"/>
+    </linearGradient>
+    <linearGradient id="coreGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#14342b"/>
+      <stop offset="100%" stop-color="#081e18"/>
+    </linearGradient>
+    <linearGradient id="specialistGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2d1b4e"/>
+      <stop offset="100%" stop-color="#190d30"/>
+    </linearGradient>
+    <linearGradient id="evidenceGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3d2817"/>
+      <stop offset="100%" stop-color="#24160a"/>
+    </linearGradient>
+    <linearGradient id="satvlmGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1c3347"/>
+      <stop offset="100%" stop-color="#0e1f2e"/>
+    </linearGradient>
+    <linearGradient id="storageGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1f242d"/>
+      <stop offset="100%" stop-color="#12161c"/>
+    </linearGradient>
+
+    <!-- Arrow Marker -->
+    <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#60a5fa"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#34d399"/>
+    </marker>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#fbbf24"/>
+    </marker>
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+
+  <!-- Title Banner -->
+  <rect x="30" y="20" width="1040" height="60" rx="10" fill="url(#headerGrad)" stroke="#374151" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="50" y="56" fill="#f9fafb" font-size="20" font-weight="700" letter-spacing="0.5">SATQUERY AI — HIGH-LEVEL SYSTEM ARCHITECTURE</text>
+  <rect x="880" y="36" width="170" height="28" rx="6" fill="#065f46" stroke="#059669" stroke-width="1"/>
+  <text x="965" y="54" fill="#a7f3d0" font-size="11" font-weight="700" text-anchor="middle">56 / 56 TESTS VERIFIED</text>
+
+  <!-- LAYER 1: CLIENT APPLICATION -->
+  <g filter="url(#shadow)">
+    <rect x="30" y="100" width="1040" height="95" rx="10" fill="url(#clientGrad)" stroke="#38bdf8" stroke-width="1.5"/>
+    <text x="50" y="125" fill="#38bdf8" font-size="12" font-weight="700" letter-spacing="1">CLIENT INTERACTION LAYER (React 19 / Next.js Vinext / Tailwind v4)</text>
+    
+    <!-- Client Box 1 -->
+    <rect x="50" y="135" width="460" height="48" rx="6" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+    <text x="65" y="155" fill="#f1f5f9" font-size="13" font-weight="600">Interactive Workspace Chat (/workspace)</text>
+    <text x="65" y="172" fill="#94a3b8" font-size="11">Drag &amp; drop imagery upload · Progressive execution stepper · Inline grounded answer &amp; reports</text>
+
+    <!-- Client Box 2 -->
+    <rect x="530" y="135" width="520" height="48" rx="6" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+    <text x="545" y="155" fill="#f1f5f9" font-size="13" font-weight="600">Spatial Result Dashboard (/analysis/[id])</text>
+    <text x="545" y="172" fill="#94a3b8" font-size="11">Canvas raster mask overlays · Vector region boundaries · Calibrated confidence · Full trace</text>
+  </g>
+
+  <!-- Connect 1 -> 2 -->
+  <path d="M 280 195 L 280 220" stroke="#60a5fa" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="290" y="212" fill="#93c5fd" font-size="10">POST /uploads &amp; /analyses</text>
+  <path d="M 790 220 L 790 195" stroke="#34d399" stroke-width="2" marker-end="url(#arrow-green)"/>
+  <text x="800" y="212" fill="#6ee7b7" font-size="10">Polling &amp; Live Status</text>
+
+  <!-- LAYER 2: API CONTROL PLANE -->
+  <g filter="url(#shadow)">
+    <rect x="30" y="225" width="1040" height="90" rx="10" fill="url(#apiGrad)" stroke="#0ea5e9" stroke-width="1.5"/>
+    <text x="50" y="248" fill="#0ea5e9" font-size="12" font-weight="700" letter-spacing="1">CONTROL PLANE &amp; INGESTION LAYER (FastAPI 0.115+ / Asynchronous Python 3.13)</text>
+    
+    <rect x="50" y="258" width="310" height="45" rx="6" fill="#082f49" stroke="#0284c7" stroke-width="1"/>
+    <text x="65" y="277" fill="#e0f2fe" font-size="12" font-weight="600">/api/v1/uploads</text>
+    <text x="65" y="293" fill="#7dd3fc" font-size="10.5">Secure ingestion, GeoTIFF CRS &amp; SHA-256</text>
+
+    <rect x="380" y="258" width="340" height="45" rx="6" fill="#082f49" stroke="#0284c7" stroke-width="1"/>
+    <text x="395" y="277" fill="#e0f2fe" font-size="12" font-weight="600">/api/v1/analyses</text>
+    <text x="395" y="293" fill="#7dd3fc" font-size="10.5">State polling, human clarification &amp; results</text>
+
+    <rect x="740" y="258" width="310" height="45" rx="6" fill="#082f49" stroke="#0284c7" stroke-width="1"/>
+    <text x="755" y="277" fill="#e0f2fe" font-size="12" font-weight="600">/api/v1/analyses/{id}/report</text>
+    <text x="755" y="293" fill="#7dd3fc" font-size="10.5">HTML, ReportLab PDF, and JSON renderers</text>
+  </g>
+
+  <!-- Connect 2 -> 3 -->
+  <path d="M 550 315 L 550 340" stroke="#60a5fa" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- LAYER 3: LANGGRAPH STATE MACHINE -->
+  <g filter="url(#shadow)">
+    <rect x="30" y="345" width="1040" height="95" rx="10" fill="url(#coreGrad)" stroke="#10b981" stroke-width="1.5"/>
+    <text x="50" y="368" fill="#10b981" font-size="12" font-weight="700" letter-spacing="1">AGENTIC STATE MACHINE (LangGraph StateGraph / 12 Nodes / SqliteSaver Checkpointer)</text>
+    
+    <rect x="50" y="378" width="1000" height="50" rx="6" fill="#064e3b" stroke="#059669" stroke-width="1"/>
+    <text x="65" y="398" fill="#ecfdf5" font-size="12" font-weight="600">Deterministic Execution Flow:</text>
+    <text x="65" y="416" fill="#a7f3d0" font-size="11">validate_inputs → interpret_query → clarification_check (HITL) → constrained_router → check_cache → dispatch_specialist → validate → evidence_engine → confidence_gate → compose_response → persist</text>
+  </g>
+
+  <!-- Connect 3 -> 4 -->
+  <path d="M 280 440 L 280 470" stroke="#a78bfa" stroke-width="2" marker-end="url(#arrow)"/>
+  <path d="M 800 440 L 800 470" stroke="#a78bfa" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- LAYER 4: SPECIALIST MODELS -->
+  <g filter="url(#shadow)">
+    <rect x="30" y="475" width="1040" height="95" rx="10" fill="url(#specialistGrad)" stroke="#a855f7" stroke-width="1.5"/>
+    <text x="50" y="498" fill="#c084fc" font-size="12" font-weight="700" letter-spacing="1">SPECIALIST COMPUTER VISION MODELS (PyTorch / NVIDIA CUDA 12.8 / Frozen Weights)</text>
+    
+    <rect x="50" y="508" width="480" height="50" rx="6" fill="#3b0764" stroke="#7e22ce" stroke-width="1"/>
+    <text x="65" y="528" fill="#faf5ff" font-size="12.5" font-weight="600">ChangeNet V3.1 (Siamese Transformer)</text>
+    <text x="65" y="546" fill="#d8b4fe" font-size="11">Bitemporal optical change detection (T1 + T2) · Binary change mask + difference heatmap</text>
+
+    <rect x="550" y="508" width="500" height="50" rx="6" fill="#3b0764" stroke="#7e22ce" stroke-width="1"/>
+    <text x="565" y="528" fill="#faf5ff" font-size="12.5" font-weight="600">SAR-FuseSeg V3 (Dual-Encoder ResNet-18)</text>
+    <text x="565" y="546" fill="#d8b4fe" font-size="11">8-Band Optical (6 bands) + SAR (VH, VV) fusion · 19 BigEarthNet multi-class categories</text>
+  </g>
+
+  <!-- Connect 4 -> 5 -->
+  <path d="M 550 570 L 550 600" stroke="#fbbf24" stroke-width="2" marker-end="url(#arrow-amber)"/>
+
+  <!-- LAYER 5: EVIDENCE ENGINE & CONFIDENCE GATE -->
+  <g filter="url(#shadow)">
+    <rect x="30" y="605" width="1040" height="90" rx="10" fill="url(#evidenceGrad)" stroke="#f59e0b" stroke-width="1.5"/>
+    <text x="50" y="628" fill="#fbbf24" font-size="12" font-weight="700" letter-spacing="1">DETERMINISTIC EVIDENCE ENGINE &amp; CONFIDENCE GATE (Zero Hallucination)</text>
+    
+    <rect x="50" y="638" width="480" height="45" rx="6" fill="#451a03" stroke="#b45309" stroke-width="1"/>
+    <text x="65" y="657" fill="#fef3c7" font-size="12" font-weight="600">Metric Projection &amp; Polygonization</text>
+    <text x="65" y="673" fill="#fde68a" font-size="11">rasterio.features.shapes · Local UTM CRS projection (m² &amp; ha) · Typed immutable facts</text>
+
+    <rect x="550" y="638" width="500" height="45" rx="6" fill="#451a03" stroke="#b45309" stroke-width="1"/>
+    <text x="565" y="657" fill="#fef3c7" font-size="12" font-weight="600">Pre-Composition Validator &amp; 3-Way Gate</text>
+    <text x="565" y="673" fill="#fde68a" font-size="11">validator.py (Semantic support truth) · Decision: ACCEPT | WARN | ABSTAIN</text>
+  </g>
+
+  <!-- Connect 5 -> 6 -->
+  <path d="M 550 695 L 550 720" stroke="#60a5fa" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- LAYER 6: SATVLM & STORAGE -->
+  <g filter="url(#shadow)">
+    <rect x="30" y="725" width="500" height="110" rx="10" fill="url(#satvlmGrad)" stroke="#38bdf8" stroke-width="1.5"/>
+    <text x="50" y="748" fill="#38bdf8" font-size="12" font-weight="700" letter-spacing="1">SATVLM REASONING LAYER</text>
+    <text x="50" y="770" fill="#f1f5f9" font-size="12.5" font-weight="600">satvlm-prompted-v1 (Zero-Shot Freeze)</text>
+    <text x="50" y="790" fill="#94a3b8" font-size="11">• Pinned parameters (temp=0.0, do_sample=false)</text>
+    <text x="50" y="806" fill="#94a3b8" font-size="11">• Zero channel fabrication &amp; exact measurement preservation</text>
+    <text x="50" y="822" fill="#94a3b8" font-size="11">• Deterministic user-facing templates on WARN / ABSTAIN</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="550" y="725" width="520" height="110" rx="10" fill="url(#storageGrad)" stroke="#64748b" stroke-width="1.5"/>
+    <text x="570" y="748" fill="#94a3b8" font-size="12" font-weight="700" letter-spacing="1">PERSISTENCE &amp; IMMUTABLE ARTIFACTS</text>
+    <text x="570" y="770" fill="#f1f5f9" font-size="12.5" font-weight="600">Local Metadata DB &amp; Artifact Store</text>
+    <text x="570" y="790" fill="#cbd5e1" font-size="11">• SQLite (var/satquery.db) / PostgreSQL metadata store</text>
+    <text x="570" y="806" fill="#cbd5e1" font-size="11">• Binary raster masks &amp; GeoJSON spatial boundary files</text>
+    <text x="570" y="822" fill="#cbd5e1" font-size="11">• Immutable downloadable reports: HTML, PDF (ReportLab), JSON</text>
+  </g>
+
+</svg>

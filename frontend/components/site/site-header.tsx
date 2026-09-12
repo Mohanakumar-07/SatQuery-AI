@@ -15,8 +15,8 @@ export function SiteHeader({ mode = 'landing', backHref, backLabel }: SiteHeader
   return (
     <header className={cn('site-header', mode === 'app' && 'app-site-header')}>
       <Link href="/" className="wordmark" aria-label="SatQuery AI home">
-        <span className="wordmark-mark"><SatIcon aria-hidden="true" /></span>
-        <span>SATQUERY</span>
+        <span className="wordmark-icon"><SatIcon aria-hidden="true" /></span>
+        <span className="wordmark-title">SATQUERY</span>
         <span className="wordmark-ai">AI</span>
       </Link>
 

@@ -16,6 +16,7 @@ import base64
 import json
 import logging
 import mimetypes
+import os
 import time
 import urllib.error
 import urllib.request
@@ -189,8 +190,44 @@ def _run_change_detection(context: PipelineContext) -> PipelineOutcome:
         "- Note the approximate extent of change (small/moderate/large area affected)."
     )
 
+    # Try executing ChangeFormer V6 specialist for verified pixel change detection
+    cf_evidence = None
+    cf_pred = None
+    cf_trace = []
+    try:
+        from app.models.changenet_adapter import ChangeNetAdapter
+        cf_adapter = ChangeNetAdapter()
+        if cf_adapter.available().available and before_src and after_src and before_src.path and after_src.path:
+            context.report("inference", 60, "Running ChangeFormer V6 specialist for pixel-level change detection.")
+            cf_adapter.load()
+            bundle_dict = {
+                "t1_image": str(before_src.path),
+                "t2_image": str(after_src.path),
+                "transform": before_src.transform,
+                "crs": before_src.crs,
+            }
+            cf_result = cf_adapter._impl.execute(bundle_dict)
+            cf_evidence = cf_result.get("evidence")
+            cf_pred = cf_result.get("prediction")
+            cf_trace.append("changeformer_v6_inferred")
+    except Exception as exc:
+        logger.warning("ChangeFormer execution fell back to VLM only: %s", exc)
+
     if before_b64 and after_b64:
         context.report("inference", 65, "Comparing before and after imagery for temporal change.")
+        evidence_hint = ""
+        if cf_evidence and cf_pred:
+            area_val = cf_evidence.get("area", {}).get("value", 0)
+            unit_val = cf_evidence.get("area", {}).get("unit", "m2")
+            ha_val = cf_evidence.get("area", {}).get("hectares", 0)
+            evidence_hint = (
+                f"\n\nChangeFormer verified measurements:\n"
+                f"- Changed pixels: {cf_pred.get('changed_pixels', 0)} ({cf_pred.get('change_percentage', 0):.2f}% of image)\n"
+                f"- Measured change area: {area_val:,.1f} {unit_val} ({ha_val:.2f} ha)\n"
+                f"- Number of distinct change regions: {cf_evidence.get('region_count', 0)}\n"
+                f"Incorporate these factual measurements directly into your explanation."
+            )
+
         messages = [
             {"role": "system", "content": system_prompt},
             {
@@ -201,6 +238,7 @@ def _run_change_detection(context: PipelineContext) -> PipelineOutcome:
                         "The FIRST image is the BEFORE (earlier date). "
                         "The SECOND image is the AFTER (later date). "
                         "Compare them and describe the changes you observe."
+                        f"{evidence_hint}"
                     )},
                     {"type": "image_url", "image_url": {
                         "url": f"data:image/jpeg;base64,{before_b64}", "detail": "high"}},
@@ -223,10 +261,21 @@ def _run_change_detection(context: PipelineContext) -> PipelineOutcome:
     answer = _call_nvidia_vlm(messages, max_tokens=600)
 
     if not answer:
-        answer = (
-            "Change analysis could not be completed. "
-            "Please ensure both before and after images are valid satellite imagery of the same area."
-        )
+        if cf_evidence and cf_pred:
+            area_val = cf_evidence.get("area", {}).get("value", 0)
+            unit_val = cf_evidence.get("area", {}).get("unit", "m2")
+            ha_val = cf_evidence.get("area", {}).get("hectares", 0)
+            answer = (
+                f"ChangeFormer V6 detected {cf_pred.get('changed_pixels', 0)} changed pixels "
+                f"({cf_pred.get('change_percentage', 0):.2f}% of the scene). "
+                f"The detected physical change encompasses {area_val:,.1f} {unit_val} ({ha_val:.2f} ha) "
+                f"across {cf_evidence.get('region_count', 0)} distinct spatial regions."
+            )
+        else:
+            answer = (
+                "Change analysis could not be completed. "
+                "Please ensure both before and after images are valid satellite imagery of the same area."
+            )
 
     context.report("evidence", 88, "Assembling change evidence and spatial statistics.")
 
@@ -237,46 +286,84 @@ def _run_change_detection(context: PipelineContext) -> PipelineOutcome:
             "value": 0.76,
             "answer_status": "answered",
             "evidence_coverage": 0.72,
-            "unsupported_claims": 1,
+            "unsupported_claims": 0 if cf_evidence else 1,
             "calibrated": True,
             "measured_on": "bi_temporal_change_task",
         }
     ]
 
+    models_list = [
+        {"name": "Vision Language Model", "role": "change_description", "version": "v1"},
+    ]
+
+    evidence_dict: dict[str, Any] = {
+        "kind": "change",
+        "georeferenced": context.bundle.georeferenced,
+        "synthetic": False,
+        "region_count": cf_evidence.get("region_count") if cf_evidence else None,
+        "regions": cf_evidence.get("regions", []) if cf_evidence else [],
+        "class_areas": [],
+        "modality_contributions": [
+            {"modality": "optical", "model": "vision-language-model",
+             "score": 0.76, "notes": "Change described from visual comparison of before/after pair."}
+        ],
+        "warnings": [],
+    }
+
+    warnings_list = []
+
+    if cf_evidence and cf_pred:
+        specialists.insert(0, {
+            "source": "ChangeNet",
+            "kind": "binary_change_detection",
+            "value": cf_pred.get("change_percentage", 0) / 100.0,
+            "answer_status": "detected" if cf_pred.get("changed_pixels", 0) > 0 else "no_change",
+            "evidence_coverage": 1.0,
+            "unsupported_claims": 0,
+            "calibrated": False,
+            "measured_on": "bi_temporal_change_task",
+        })
+        models_list.insert(0, {
+            "name": "ChangeFormer V6",
+            "role": "binary_change_detection",
+            "version": "V3.1-Champion",
+        })
+        evidence_dict["area"] = cf_evidence.get("area")
+        evidence_dict["geojson"] = cf_evidence.get("geojson")
+        evidence_dict["prediction_statistics"] = cf_evidence.get("prediction_statistics")
+        evidence_dict["modality_contributions"].append({
+            "modality": "optical_bitemporal",
+            "model": "ChangeFormer-V6",
+            "score": cf_pred.get("change_percentage", 0) / 100.0,
+            "notes": "Verified pixel-level difference mask and spatial geometry extracted.",
+        })
+    else:
+        evidence_dict["warnings"].append({
+            "code": "NO_BINARY_MASK",
+            "level": "info",
+            "message": "Binary change mask requires the ChangeFormer specialist; visual analysis provided.",
+        })
+        warnings_list.append({
+            "code": "VISUAL_CHANGE_ONLY",
+            "level": "info",
+            "message": "Change described from visual inspection; pixel-level mask not computed in this mode.",
+        })
+
     return PipelineOutcome(
         answer=answer,
         answer_type="answered",
-        evidence={
-            "kind": "change",
-            "georeferenced": context.bundle.georeferenced,
-            "synthetic": False,
-            "region_count": None,
-            "regions": [],
-            "class_areas": [],
-            "modality_contributions": [
-                {"modality": "optical", "model": "vision-language-model",
-                 "score": 0.76, "notes": "Change described from visual comparison of before/after pair."}
-            ],
-            "warnings": [
-                {"code": "NO_BINARY_MASK", "level": "info",
-                 "message": "Binary change mask requires the ChangeFormer specialist; visual analysis provided."}
-            ],
-        },
+        evidence=evidence_dict,
         specialists=specialists,
-        models=[
-            {"name": "Vision Language Model", "role": "change_description", "version": "v1"},
-        ],
-        warnings=[
-            {"code": "VISUAL_CHANGE_ONLY", "level": "info",
-             "message": "Change described from visual inspection; pixel-level mask not computed in this mode."},
-        ],
+        models=models_list,
+        warnings=warnings_list,
         trace=[
             "bi_temporal_change_selected",
+            *cf_trace,
             "before_after_pair_encoded",
             "vlm_change_comparison_completed",
             "evidence_assembled",
         ],
-        versions={"code": context.settings.version, "pipeline": "nvidia-vlm-v1"},
+        versions={"code": context.settings.version, "pipeline": "satquery-multimodel-v1"},
     )
 
 

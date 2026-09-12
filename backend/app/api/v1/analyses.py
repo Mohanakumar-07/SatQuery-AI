@@ -11,11 +11,14 @@ from app.core.errors import BadRequest, Conflict, ErrorCode, QueueUnavailable, U
 from app.db.base import as_utc
 from app.db.models import Analysis
 from app.db.repo import (
+    claim_graph_resume,
     create_analysis,
     get_uploads,
     list_analyses,
     list_events,
     mark_failed,
+    mark_graph_resumed,
+    mark_graph_resume_failed,
     transition,
 )
 from app.schemas.analyses import (
@@ -59,8 +62,11 @@ def create(
 
     from app.core.ids import new_id
 
+    thread_id = new_id("thread")
     analysis = Analysis(
         id=new_id("analysis"),
+        thread_id=thread_id,
+        graph_resume_status="NOT_REQUIRED",
         question=request.question,
         hints=request.optional_hints.model_dump(mode="json", exclude_none=True) if request.optional_hints else None,
         status=AnalysisStatus.QUEUED.value,
@@ -149,6 +155,21 @@ def read(analysis_id: str, session: DbSession, settings: AppSettings) -> Analysi
 @router.get("/{analysis_id}/status", response_model=AnalysisStatusResponse, summary="Poll analysis progress")
 def poll(analysis_id: str, session: DbSession, settings: AppSettings) -> AnalysisStatusResponse:
     analysis = require_analysis(session, analysis_id)
+
+    # Poll-driven LangGraph resume check (Section 15)
+    if analysis.graph_resume_status == "PENDING":
+        if claim_graph_resume(session, analysis.id):
+            thread_id = analysis.thread_id or analysis.id
+            try:
+                from app.orchestration import get_satquery_pipeline
+                pipeline = get_satquery_pipeline()
+                pipeline.invoke(None, config={"configurable": {"thread_id": thread_id}})
+                mark_graph_resumed(session, analysis.id)
+            except Exception as exc:
+                import logging
+                logging.getLogger("analyses.poll").exception("Failed to resume LangGraph in poll: %s", exc)
+                mark_graph_resume_failed(session, analysis.id, str(exc))
+
     events = list_events(session, analysis.id, limit=10, newest=True)
     return _status(analysis, settings, events=events)
 
@@ -273,7 +294,15 @@ def _created(analysis: Analysis, settings, *, message: str | None = None) -> Ana
 def _clarification(analysis: Analysis) -> ClarificationPayload | None:
     if not analysis.clarification:
         return None
-    return ClarificationPayload.model_validate(analysis.clarification)
+    raw = dict(analysis.clarification)
+    raw.setdefault("analysis_id", analysis.id)
+    raw.setdefault("status", AnalysisStatus.NEEDS_CLARIFICATION.value)
+    raw.setdefault("missing_fields", ["file_roles"])
+    raw.setdefault("question", "Clarification required to proceed with analysis.")
+    raw.setdefault("allowed_roles", ["before", "after"])
+    raw.setdefault("upload_ids", [u.upload_id for u in analysis.analysis_uploads] if analysis.analysis_uploads else [])
+    raw.setdefault("upload_ids", analysis.upload_ids)
+    return ClarificationPayload.model_validate(raw)
 
 
 def _error(analysis: Analysis) -> ErrorPayload | None:

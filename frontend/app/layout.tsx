@@ -57,6 +57,11 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en" className="dark">
       <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: "if(typeof window!=='undefined'){window.process=window.process||{env:{}}};",
+          }}
+        />
         <link rel="icon" href="/SatQuery-Icon.svg" type="image/svg+xml" />
         <link rel="alternate icon" href="/favicon.svg" type="image/svg+xml" />
       </head>

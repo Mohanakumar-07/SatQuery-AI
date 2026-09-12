@@ -84,9 +84,32 @@ def init_db(url: str | None = None) -> None:
     # module directly (CLI/bootstrap scripts) must be as reliable as importing the
     # full FastAPI route graph first.
     from app.db import models as _models  # noqa: F401
+    from sqlalchemy import inspect, text
 
     engine = get_engine(url)
     Base.metadata.create_all(bind=engine)
+
+    # Lightweight migration for newly added columns on existing tables
+    try:
+        inspector = inspect(engine)
+        if "analyses" in inspector.get_table_names():
+            existing_cols = {c["name"] for c in inspector.get_columns("analyses")}
+            new_cols = [
+                ("thread_id", "VARCHAR(64)"),
+                ("graph_resume_status", "VARCHAR(32) DEFAULT 'NOT_REQUIRED'"),
+                ("resume_attempt_count", "INTEGER DEFAULT 0"),
+                ("last_resume_error", "TEXT"),
+                ("last_resume_attempt_at", "TIMESTAMP"),
+                ("cache_key", "VARCHAR(128)"),
+                ("cache_hit", "BOOLEAN DEFAULT FALSE"),
+            ]
+            with engine.connect() as conn:
+                for col_name, col_type in new_cols:
+                    if col_name not in existing_cols:
+                        conn.execute(text(f"ALTER TABLE analyses ADD COLUMN {col_name} {col_type}"))
+                        conn.commit()
+    except Exception:
+        pass
 
 
 @contextmanager

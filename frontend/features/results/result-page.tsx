@@ -103,6 +103,12 @@ export function ResultPage({ analysisId }: { analysisId: string }) {
       <div className="result-heading">
         <div><span className="section-kicker">Analysis complete / {analysisId}</span><h1>{readable(result.answer_type ?? result.task)}.</h1></div>
         <div className="result-actions"><span className="complete-badge"><CircleCheck />{authoritative ? 'Completed' : 'Non-authoritative'}</span><Button variant="outline" onClick={() => window.open(satqueryApi.reportUrl(analysisId, 'html', false), '_blank', 'noopener,noreferrer')}>View report</Button><Button onClick={() => { window.location.href = satqueryApi.reportUrl(analysisId, 'json', true); }}><Download />Download JSON</Button></div>
+        <div className="result-actions">
+          <span className="complete-badge"><CircleCheck />{authoritative ? 'Completed' : 'Non-authoritative'}</span>
+          <Button variant="outline" onClick={() => window.open(satqueryApi.reportUrl(analysisId, 'html', false), '_blank', 'noopener,noreferrer')}>View report</Button>
+          <Button variant="outline" onClick={() => { window.location.href = satqueryApi.reportUrl(analysisId, 'pdf', true); }}><Download />PDF</Button>
+          <Button onClick={() => { window.location.href = satqueryApi.reportUrl(analysisId, 'json', true); }}><Download />Download JSON</Button>
+        </div>
       </div>
 
       <section className="result-question"><span>Question</span><p>{result.question ?? 'Question unavailable'}</p></section>

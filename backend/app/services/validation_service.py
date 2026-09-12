@@ -120,7 +120,11 @@ class ValidationService:
         if pair:
             warnings.extend(pair.warnings)
             errors.extend(
-                Warning(code=check.name.upper(), level=WarningLevel.ERROR, message=check.message or "")
+                Warning(
+                    code=check.name.upper(),
+                    level=WarningLevel.ERROR,
+                    message=check.message or f"Validation check {check.name} failed.",
+                )
                 for check in pair.checks
                 if check.status == "fail"
             )
