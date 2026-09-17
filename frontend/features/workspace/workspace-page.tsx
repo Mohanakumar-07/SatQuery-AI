@@ -152,7 +152,7 @@ export function WorkspacePage() {
   const [showProfile, setShowProfile] = useState(false);
   const [activeItemId, setActiveItemId] = useState<string>('');
 
-  const { status: analysisStatus, result: analysisResult } = useAnalysis(analysisId);
+  const { status: analysisStatus, result: analysisResult, refresh } = useAnalysis(analysisId);
 
   useEffect(() => {
     satqueryApi
@@ -290,6 +290,7 @@ export function WorkspacePage() {
         question: clarifiedQuestion || undefined,
       };
       await satqueryApi.submitClarification(analysisId, payload);
+      refresh();
     } catch (error) {
       setStage('clarification');
       setNotice(requestError(error));

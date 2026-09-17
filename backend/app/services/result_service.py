@@ -216,6 +216,81 @@ class ResultService:
                 for item in (outcome.get("confidence_warnings") or [])
             ],
         )
+
+        # ── Honour pre-computed LangGraph confidence ──────────────────────────
+        # The LangGraph pipeline runs its own deterministic gate (confidence_gate.py)
+        # which understands text-based specialist answers (SatVLM) without numeric
+        # scores. If that gate already produced a decision, reuse it directly
+        # instead of re-running the score-based ConfidenceService.evaluate() which
+        # always ABSTAINs when no calibrated numeric score exists (e.g. SatVLM VQA).
+        pipeline_confidence = outcome.get("confidence")
+        if isinstance(pipeline_confidence, dict) and pipeline_confidence.get("decision"):
+            raw_decision = str(pipeline_confidence["decision"]).lower()
+            langgraph_decision = (
+                ConfidenceDecision.ACCEPTED  if raw_decision in ("accept", "accepted")
+                else ConfidenceDecision.WARNING  if raw_decision in ("warn", "warning")
+                else ConfidenceDecision.ABSTAINED
+            )
+            policy = self.confidence.policy_for(analysis.task)
+            # Carry over calibration/provisional warnings from the policy
+            if policy and policy.provisional:
+                raw_warnings.append(
+                    Warning(
+                        code="CALIBRATION_UNVALIDATED",
+                        level=WarningLevel.WARNING,
+                        message=(
+                            "Thresholds are unvalidated schema placeholders; they must be "
+                            "replaced with held-out calibration results before any reported "
+                            "performance is meaningful (plan section 11.2)."
+                        ),
+                        detail={"policy_version": policy.threshold_policy_version},
+                    )
+                )
+            raw_warnings.append(
+                Warning(
+                    code="NO_CALIBRATED_SCORE",
+                    level=WarningLevel.WARNING,
+                    message="No specialist produced a calibrated, interpretable score.",
+                )
+            )
+            # Build a lightweight ConfidenceResponse from the LangGraph decision
+            from app.schemas.confidence import SpecialistConfidence, SpecialistKind
+            langgraph_specialists = [
+                SpecialistConfidence(
+                    source=s.get("source", "unknown"),
+                    kind=SpecialistKind.CLAIM_VALIDATION,
+                    answer_status=s.get("answer_status"),
+                    calibrated=False,
+                )
+                for s in (pipeline_confidence.get("specialists") or outcome.get("specialists") or [])
+                if isinstance(s, dict)
+            ]
+            from app.schemas.confidence import ConfidenceResponse as ConfResp
+            confidence = ConfResp(
+                decision=langgraph_decision,
+                specialists=langgraph_specialists,
+                policy=policy,
+                abstain_reason=pipeline_confidence.get("reason") or pipeline_confidence.get("abstain_reason"),
+                rationale=pipeline_confidence.get("reason") or "LangGraph deterministic gate decision reused.",
+                warnings=raw_warnings[:],
+            )
+        else:
+            # Fallback: no pre-computed LangGraph decision — run the score-based evaluator
+            confidence_context = {
+                **evidence_payload,
+                "evidence": evidence_payload,
+                "answer": outcome.get("answer"),
+                "models": outcome.get("models") or routing.get("models") or [],
+            }
+            confidence = self.confidence.evaluate(
+                task=analysis.task,
+                specialists=list(outcome.get("specialists") or []),
+                evidence=confidence_context,
+                extra_warnings=[
+                    Warning.model_validate(item) if isinstance(item, dict) else item
+                    for item in (outcome.get("confidence_warnings") or [])
+                ],
+            )
         raw_warnings.extend(confidence.warnings)
 
         answer = outcome.get("answer")

@@ -161,6 +161,10 @@ def serialize_evidence_bundle(
                 bundle.append(serialize_landcover_facts(item))
             elif "class_transition_matrix" in item or "changed_area_by_current_class" in item:
                 bundle.append(serialize_cross_model_facts(item))
+            elif item.get("kind") == "change" or "region_count" in item or "changed_area_m2" in item:
+                bundle.append(serialize_change_facts(item))
+            elif item.get("kind") == "land_cover" or "dominant_class" in item or "classes" in item:
+                bundle.append(serialize_landcover_facts(item))
             else:
                 # Raw dictionary wrapper
                 bundle.append({

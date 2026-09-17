@@ -146,9 +146,10 @@ def extract_query_requirements(query: str, hints: Optional[Dict[str, Any]] = Non
 
     # Check for landcover / single-scene intent
     if targeted_classes or hints.get("intent") in {"land_cover", "segmentation", "scene_classification"}:
-        required_types.append("LandCoverFacts")
-        for cls_name in targeted_classes:
-            required_facts.append(f"{cls_name}_percentage")
+        if requires_quant or not is_explicit_qualitative:
+            required_types.append("LandCoverFacts")
+            for cls_name in targeted_classes:
+                required_facts.append(f"{cls_name}_percentage")
 
     # If semantic transition is requested, CrossModelFacts or temporal LandCoverFacts required
     if requires_semantic:

@@ -41,12 +41,15 @@ from app.db.repo import (
     transition,
 )
 from app.db.session import session_scope
+from app.models.base import AdapterRequest
 from app.models.changenet_adapter import ChangeNetAdapter
+from app.models.satvlm_adapter import SatVLMAdapter
 from app.orchestration.cache import compute_analysis_cache_key
 from app.orchestration.state import SatQueryState
 from app.preprocessing.canonical_scene import build_scene_bundle
 from app.schemas.analyses import AnalysisHints
-from app.schemas.common import AnalysisStatus, Stage
+from app.schemas.common import AnalysisStatus, ConfidenceDecision, Stage
+from app.schemas.confidence import ConfidenceResponse
 from app.services.interpretation_service import interpret_inputs
 from app.services.query_parser import parse_question
 from app.services.validation_service import get_validation_service
@@ -342,20 +345,23 @@ def check_cache_node(state: SatQueryState) -> Dict[str, Any]:
             analysis.cache_key = cache_key
 
         if cached_analysis and cached_analysis.result:
-            logger.info("Analysis cache hit: %s reused by %s", cached_analysis.id, analysis_id)
-            trace.append(f"cache_hit_reused_{cached_analysis.id}")
-            if analysis:
-                analysis.cache_hit = True
+            cached_conf = cached_analysis.result.get("confidence") or {}
+            cached_dec = str(cached_conf.get("decision", "")).lower()
+            if cached_dec != "abstained" and cached_analysis.answer and "cannot answer this question reliably" not in cached_analysis.answer and "can't reliably determine" not in cached_analysis.answer:
+                logger.info("Analysis cache hit: %s reused by %s", cached_analysis.id, analysis_id)
+                trace.append(f"cache_hit_reused_{cached_analysis.id}")
+                if analysis:
+                    analysis.cache_hit = True
 
-            return {
-                "cache_key": cache_key,
-                "cache_hit": True,
-                "evidence": cached_analysis.result.get("evidence", {}),
-                "specialist_results": cached_analysis.result.get("specialists", []),
-                "final_answer": cached_analysis.answer,
-                "confidence": cached_analysis.confidence or {},
-                "execution_trace": trace,
-            }
+                return {
+                    "cache_key": cache_key,
+                    "cache_hit": True,
+                    "evidence": cached_analysis.result.get("evidence", {}),
+                    "specialist_results": cached_analysis.result.get("specialists", []),
+                    "final_answer": cached_analysis.answer,
+                    "confidence": cached_analysis.confidence or {},
+                    "execution_trace": trace,
+                }
 
         trace.append("cache_miss")
         if analysis:
@@ -389,13 +395,18 @@ def dispatch_specialist_node(state: SatQueryState) -> Dict[str, Any]:
     with session_scope() as session:
         analysis = get_analysis(session, analysis_id)
         uploads = get_uploads(session, upload_ids)
-        roles = (state.get("hints") or {}).get("file_roles")
-        input_type = state.get("selected_workflow", "single_image")
+        store = get_store(settings)
+        db_hints = (analysis.hints or {}) if analysis else {}
+        roles = (state.get("hints") or {}).get("file_roles") or db_hints.get("file_roles") or (analysis.roles if analysis else {})
+        if not roles and len(uploads) == 2:
+            roles = {uploads[0].id: "before", uploads[1].id: "after"}
+        input_type = "bi_temporal" if task == "bi_temporal_change" or len(uploads) >= 2 else "single_image"
         bundle = build_scene_bundle(
             uploads=uploads,
             analysis_id=analysis_id,
             input_type=input_type,
             roles=roles,
+            store=store,
         )
 
         if analysis:
@@ -415,17 +426,67 @@ def dispatch_specialist_node(state: SatQueryState) -> Dict[str, Any]:
                 adapter.load()
                 before_src = bundle.source_for("before")
                 after_src = bundle.source_for("after")
-                if before_src and after_src and before_src.path.is_file() and after_src.path.is_file():
+                t1_path = before_src.path if before_src else None
+                if t1_path and not t1_path.is_file():
+                    for u in uploads:
+                        if before_src and getattr(before_src, "upload_id", None) == u.id:
+                            if u.stored_name and Path(u.stored_name).is_file():
+                                t1_path = Path(u.stored_name)
+                            elif u.relative_path and (store.root / u.relative_path).is_file():
+                                t1_path = store.root / u.relative_path
+                            break
+
+                t2_path = after_src.path if after_src else None
+                if t2_path and not t2_path.is_file():
+                    for u in uploads:
+                        if after_src and getattr(after_src, "upload_id", None) == u.id:
+                            if u.stored_name and Path(u.stored_name).is_file():
+                                t2_path = Path(u.stored_name)
+                            elif u.relative_path and (store.root / u.relative_path).is_file():
+                                t2_path = store.root / u.relative_path
+                            break
+
+                if t1_path and t2_path and t1_path.is_file() and t2_path.is_file():
                     bundle_dict = {
-                        "t1_image": str(before_src.path),
-                        "t2_image": str(after_src.path),
-                        "transform": before_src.transform,
-                        "crs": before_src.crs,
+                        "t1_image": str(t1_path),
+                        "t2_image": str(t2_path),
+                        "transform": before_src.transform if before_src else None,
+                        "crs": before_src.crs if before_src else None,
                     }
                     res = adapter._impl.execute(bundle_dict)
-                    specialist_results["ChangeNet"] = res
                     specialist_results["ChangeNet"] = sanitize_for_checkpoint(res)
                     trace.append("changenet_v6_inferred")
+
+        if "SatVLM" in specialists and task == "single_scene_vqa":
+            satvlm_adapter = SatVLMAdapter()
+            if satvlm_adapter.available().available:
+                satvlm_adapter.load()
+                work_dir = store.root / "work" / analysis_id
+                work_dir.mkdir(parents=True, exist_ok=True)
+                req = AdapterRequest(
+                    analysis_id=analysis_id,
+                    task=task,
+                    question=state.get("question", ""),
+                    bundle=bundle,
+                    work_dir=work_dir,
+                )
+                vlm_res = satvlm_adapter.infer(req)
+                specialist_results["SatVLM"] = sanitize_for_checkpoint(
+                    {
+                        "source": vlm_res.source,
+                        "version": vlm_res.version,
+                        "answer": vlm_res.answer,
+                        "answer_status": vlm_res.answer_status,
+                        "evidence_coverage": vlm_res.evidence_coverage,
+                        "unsupported_claims": vlm_res.unsupported_claims,
+                        "trace": vlm_res.trace,
+                        "warnings": [
+                            w.model_dump() if hasattr(w, "model_dump") else w
+                            for w in vlm_res.warnings
+                        ],
+                    }
+                )
+                trace.append("satvlm_qwen3b_inferred")
 
         trace.append("dispatch_specialist_completed")
         return {
@@ -454,7 +515,7 @@ def run_evidence_engine_node(state: SatQueryState) -> Dict[str, Any]:
 
     if state.get("cache_hit") and state.get("evidence"):
         trace.append("evidence_engine_reused_from_cache")
-        return {"execution_trace": trace}
+        return {"execution_trace": trace, "evidence": state.get("evidence")}
 
     analysis_id = state["analysis_id"]
     specialist_results = state.get("specialist_results", {})
@@ -473,12 +534,24 @@ def run_evidence_engine_node(state: SatQueryState) -> Dict[str, Any]:
         cf_ev = cf_res.get("evidence", {})
         evidence.update(cf_ev)
         evidence["kind"] = "change"
+        if "change_percentage" in cf_ev:
+            evidence["changed_percentage"] = cf_ev["change_percentage"]
+            evidence["percentage"] = cf_ev["change_percentage"]
         for r in evidence.get("regions", []):
             if "id" not in r and "region_id" in r:
                 r["id"] = r["region_id"]
             if "area_value" not in r and "area_m2" in r:
                 r["area_value"] = r["area_m2"]
                 r["area_unit"] = "m2"
+        raw_ev_warnings = evidence.get("warnings") or []
+        if isinstance(raw_ev_warnings, list):
+            clean_ev_warnings = []
+            for w in raw_ev_warnings:
+                if isinstance(w, str):
+                    clean_ev_warnings.append({"code": "PIPELINE_WARNING", "message": w, "level": "warning"})
+                else:
+                    clean_ev_warnings.append(w)
+            evidence["warnings"] = clean_ev_warnings
         trace.append("evidence_engine_change_extracted")
 
     with session_scope() as session:
@@ -519,9 +592,14 @@ def validate_evidence_contract_node(state: SatQueryState) -> Dict[str, Any]:
     if evidence and isinstance(evidence, dict) and (evidence.get("regions") or evidence.get("class_areas") or evidence.get("area")):
         bundle_items.append(evidence)
 
-    for s_name, res in specialist_results.items():
-        if isinstance(res, dict) and res.get("evidence"):
-            bundle_items.append(res["evidence"])
+    if isinstance(specialist_results, dict):
+        for s_name, res in specialist_results.items():
+            if isinstance(res, dict) and res.get("evidence"):
+                bundle_items.append(res["evidence"])
+    elif isinstance(specialist_results, list):
+        for res in specialist_results:
+            if isinstance(res, dict) and res.get("evidence"):
+                bundle_items.append(res["evidence"])
 
     evidence_bundle = serialize_evidence_bundle(bundle_items)
 
@@ -575,6 +653,18 @@ def compose_response_node(state: SatQueryState) -> Dict[str, Any]:
         trace.append("response_reused_from_cache")
         return {"execution_trace": trace}
 
+    task = state.get("interpreted_task", "")
+    specialist_results = state.get("specialist_results", {})
+    if task == "single_scene_vqa" and "SatVLM" in specialist_results and specialist_results["SatVLM"].get("answer"):
+        trace.append("satvlm_scene_answer_reused")
+        return {
+            "final_answer": specialist_results["SatVLM"]["answer"],
+            "status": AnalysisStatus.COMPLETED.value,
+            "stage": Stage.DONE.value,
+            "progress": 95,
+            "execution_trace": trace,
+        }
+
     q_req_dict = state.get("query_requirements")
     requirements = QueryRequirements.model_validate(q_req_dict) if q_req_dict else extract_query_requirements(state.get("question", ""))
     val_rep_dict = state.get("validation_report")
@@ -603,12 +693,52 @@ def compose_response_node(state: SatQueryState) -> Dict[str, Any]:
     }
 
 
+def _format_confidence_response(state_confidence: Dict[str, Any], existing_confidence: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    raw_dec = str(state_confidence.get("decision", "ABSTAIN")).upper()
+    if raw_dec == "ACCEPT":
+        decision = ConfidenceDecision.ACCEPTED
+    elif raw_dec == "WARN":
+        decision = ConfidenceDecision.WARNING
+    else:
+        decision = ConfidenceDecision.ABSTAINED
+
+    base = dict(existing_confidence or {})
+    specialists = base.get("specialists") or []
+    policy = base.get("policy")
+    warnings = base.get("warnings") or []
+
+    conf_resp = ConfidenceResponse(
+        decision=decision,
+        specialists=specialists,
+        policy=policy,
+        limiting_score=state_confidence.get("score") if state_confidence.get("score") is not None else base.get("limiting_score"),
+        limiting_source=state_confidence.get("source") or base.get("limiting_source"),
+        answer_status="answered" if decision != ConfidenceDecision.ABSTAINED else "abstained",
+        abstain_reason=state_confidence.get("reason") if decision == ConfidenceDecision.ABSTAINED else None,
+        rationale=state_confidence.get("reason") or base.get("rationale"),
+        warnings=warnings,
+    )
+    return conf_resp.model_dump(mode="json")
+
+
 # ─── Node 10B: Grounded Response With Warning (WARN) ─────────────────────────
 
 def compose_response_with_warning_node(state: SatQueryState) -> Dict[str, Any]:
     """Composes grounded natural language answer with explicit warning constraints (WARN path)."""
     trace = list(state.get("execution_trace", []))
     trace.append("compose_response_with_warning_started")
+
+    task = state.get("interpreted_task", "")
+    specialist_results = state.get("specialist_results", {})
+    if task == "single_scene_vqa" and "SatVLM" in specialist_results and specialist_results["SatVLM"].get("answer"):
+        trace.append("satvlm_scene_answer_reused")
+        return {
+            "final_answer": specialist_results["SatVLM"]["answer"],
+            "status": AnalysisStatus.COMPLETED.value,
+            "stage": Stage.DONE.value,
+            "progress": 95,
+            "execution_trace": trace,
+        }
 
     q_req_dict = state.get("query_requirements")
     requirements = QueryRequirements.model_validate(q_req_dict) if q_req_dict else extract_query_requirements(state.get("question", ""))
@@ -636,7 +766,7 @@ def compose_response_with_warning_node(state: SatQueryState) -> Dict[str, Any]:
     trace.append("compose_response_with_warning_completed")
     return {
         "final_answer": answer,
-        "status": "completed_with_warnings",
+        "status": AnalysisStatus.COMPLETED.value,
         "stage": Stage.DONE.value,
         "progress": 95,
         "execution_trace": trace,
@@ -675,7 +805,7 @@ def abstention_response_node(state: SatQueryState) -> Dict[str, Any]:
 
     return {
         "final_answer": answer,
-        "status": "abstained",
+        "status": AnalysisStatus.COMPLETED.value,
         "stage": Stage.DONE.value,
         "progress": 100,
         "execution_trace": trace,
@@ -690,15 +820,17 @@ def persist_result_node(state: SatQueryState) -> Dict[str, Any]:
     trace = list(state.get("execution_trace", []))
     trace.append("persist_result_started")
 
-    status_val = state.get("status", AnalysisStatus.COMPLETED.value)
+    status_val = AnalysisStatus.COMPLETED.value
     answer = state.get("final_answer")
     evidence = state.get("evidence", {})
     confidence = state.get("confidence", {})
     warnings = state.get("warnings", [])
 
+    conf_dec = str(state.get("confidence", {}).get("decision") or "").upper()
+    is_abstained = conf_dec in ("ABSTAIN", "ABSTAINED")
     outcome = {
         "answer": answer,
-        "answer_type": "abstained" if status_val == "abstained" else "answered",
+        "answer_type": "abstained" if is_abstained else "answered",
         "evidence": evidence,
         "evidence_bundle": state.get("evidence_bundle"),
         "query_requirements": state.get("query_requirements"),
@@ -708,7 +840,7 @@ def persist_result_node(state: SatQueryState) -> Dict[str, Any]:
         "trace": trace,
         "models": [{"name": s, "version": "v1"} for s in state.get("selected_specialists", [])],
         "specialists": [
-            {"source": s, "answer_status": "answered" if status_val != "abstained" else "abstained"}
+            {"source": s, "answer_status": "abstained" if is_abstained else "answered"}
             for s in state.get("selected_specialists", [])
         ],
     }
@@ -745,6 +877,24 @@ def persist_result_node(state: SatQueryState) -> Dict[str, Any]:
                     message="Analysis complete.",
                     data=None,
                 )
+
+            # Preserve authoritative SatVLM Track 1 grounded response and confidence
+            if answer:
+                analysis.answer = answer
+                if analysis.result and isinstance(analysis.result, dict):
+                    res = dict(analysis.result)
+                    res["answer"] = answer
+                    analysis.result = res
+            if confidence:
+                formatted_conf = _format_confidence_response(
+                    confidence,
+                    analysis.result.get("confidence") if analysis.result and isinstance(analysis.result, dict) else None,
+                )
+                analysis.confidence = formatted_conf
+                if analysis.result and isinstance(analysis.result, dict):
+                    res = dict(analysis.result)
+                    res["confidence"] = formatted_conf
+                    analysis.result = res
 
     trace.append("persist_result_completed")
     return {

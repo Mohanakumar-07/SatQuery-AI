@@ -62,6 +62,19 @@ class EvidenceService:
         if artifact_urls:
             payload = self._rewrite_artifact_urls(payload, artifact_urls)
 
+        # Normalize warnings: string warnings from specialist engines become Warning dicts
+        raw_warnings = payload.get("warnings") or []
+        if isinstance(raw_warnings, list):
+            clean_warnings = []
+            for w in raw_warnings:
+                if isinstance(w, str):
+                    clean_warnings.append({"code": "PIPELINE_WARNING", "message": w, "level": "warning"})
+                elif isinstance(w, dict):
+                    clean_warnings.append(w)
+                elif hasattr(w, "model_dump"):
+                    clean_warnings.append(w.model_dump())
+            payload["warnings"] = clean_warnings
+
         evidence = Evidence.model_validate(payload)
         evidence = self._complete_locations(evidence, scene_bounds=scene_bounds)
         return evidence

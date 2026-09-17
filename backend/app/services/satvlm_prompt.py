@@ -274,6 +274,11 @@ FEW_SHOT_EXAMPLES: List[Dict[str, Any]] = [
 
 SATVLM_PROMPTED_V1_FREEZE_RECORD: Dict[str, Any] = {
     "target_identifier": TARGET_IDENTIFIER,
+    "target_identifier": "satvlm-prompted-v1-qwen3b-4bit",
+    "model_name": "Qwen2.5-VL-3B-Instruct",
+    "quantization": "4-bit NF4 (BitsAndBytes)",
+    "runtime": "Transformers + PyTorch",
+    "device": "CUDA",
     "prompt_version": PROMPT_VERSION,
     "prompt_hash": hashlib.sha256(SYSTEM_PROMPT.encode("utf-8")).hexdigest(),
     "query_requirements_schema_version": "query_requirements_v1",

@@ -62,6 +62,7 @@ artifacts/checkpoints/**
 Temp/
 temp/
 tmp/
+scratch/
 # ---- Implementation plans, status reports & scratch scripts (NEVER commit) ----
 INTEGRATION_STATUS_REPORT.md
 SatQuery_LangGraph_LangChain_Architecture_v3.md
@@ -238,6 +239,21 @@ changenet/**
 /ml/data/bigearthnet_subset/
 /ml/data/*.parquet
 /ml/data/.build.lock
+
+# ============================================================================
+# Test image data — manual web testing & demo samples: NEVER commit
+# ============================================================================
+
+# Original BigEarthNet tar archive (1.75 GB)
+bigearthnet-2gb-s1s2-Dataset
+
+# Extracted BigEarthNet dataset (raw .npz patches + rendered PNGs)
+bigearthnet-2gb/
+bigearthnet-2gb/**
+
+# Curated sample test images for web UI testing
+sample_test_data/
+sample_test_data/**
 
 # SatVLM (Qwen2.5-VL) weights, training data & HF cache
 /ml/satvlm/checkpoints/

@@ -44,7 +44,11 @@ export function useAnalysis(analysisId: string, intervalMs = 1400) {
           if (active) setState({ status: polledStatus, result: polledResult, error: null, loading: false });
           return;
         }
-        if (polledStatus.status === 'failed' || polledStatus.status === 'needs_clarification') return;
+        if (polledStatus.status === 'failed') return;
+        if (polledStatus.status === 'needs_clarification') {
+          timer = setTimeout(poll, 2500);
+          return;
+        }
         timer = setTimeout(poll, intervalMs);
       } catch (pollErr) {
         if (!active) return;
@@ -65,4 +69,3 @@ export function useAnalysis(analysisId: string, intervalMs = 1400) {
 
   return { ...state, refresh };
 }
-

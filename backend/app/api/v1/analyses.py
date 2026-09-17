@@ -300,8 +300,7 @@ def _clarification(analysis: Analysis) -> ClarificationPayload | None:
     raw.setdefault("missing_fields", ["file_roles"])
     raw.setdefault("question", "Clarification required to proceed with analysis.")
     raw.setdefault("allowed_roles", ["before", "after"])
-    raw.setdefault("upload_ids", [u.upload_id for u in analysis.analysis_uploads] if analysis.analysis_uploads else [])
-    raw.setdefault("upload_ids", analysis.upload_ids)
+    raw.setdefault("upload_ids", analysis.upload_ids or [])
     return ClarificationPayload.model_validate(raw)
 
 

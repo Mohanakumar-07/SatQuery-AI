@@ -1,12 +1,12 @@
 {
-  "registry_version": "registry-v0.1",
-  "generated": "2026-09-01",
+  "registry_version": "registry-v0.2",
+  "generated": "2026-09-15",
   "notes": "Versioned model registry for the constrained task router (plan sections 4.2, 9, 16). Entries start as 'not_implemented' because model owners attach the adapters; the router abstains rather than guessing when a required specialist is unavailable. Licence blocks are deliberately unverified until a human has read the exact terms of the downloaded artifact.",
   "models": [
     {
       "internal_name": "SatVLM",
-      "model_name": "Qwen2.5-VL-7B-Instruct",
-      "version": "satvlm-baseline-v1",
+      "model_name": "Qwen2.5-VL-3B-Instruct",
+      "version": "satvlm-prompted-v1-qwen3b-4bit",
       "role": "primary_specialist",
       "status": "available",
       "permitted": true,
@@ -14,19 +14,19 @@
       "preprocessing_version": "satvlm-preprocess-v1",
       "calibration_version": null,
       "adapter_ref": "app.models.satvlm_adapter.SatVLMAdapter",
-      "requires_gpu": false,
+      "requires_gpu": true,
       "resident": true,
       "licence": {
-        "source": "Vision Language Model (API-backed for MVP)",
+        "source": "Qwen/Qwen2.5-VL-3B-Instruct",
         "verified": true,
-        "notes": "MVP uses an API-backed VLM for scene VQA and description."
+        "notes": "Local Qwen2.5-VL-3B-Instruct in 4-bit NF4 precision on CUDA."
       },
-      "notes": "Scene description and visual question answering specialist."
+      "notes": "Local scene description and visual question answering specialist."
     },
     {
       "internal_name": "SatVLMComposition",
-      "model_name": "Qwen2.5-VL-7B-Instruct",
-      "version": "satvlm-compose-v1",
+      "model_name": "Qwen2.5-VL-3B-Instruct",
+      "version": "satvlm-prompted-v1-qwen3b-4bit",
       "role": "answer_composition",
       "status": "available",
       "permitted": true,
@@ -34,12 +34,12 @@
       "preprocessing_version": "satvlm-preprocess-v1",
       "calibration_version": null,
       "adapter_ref": "app.models.satvlm_adapter.SatVLMAdapter",
-      "requires_gpu": false,
+      "requires_gpu": true,
       "resident": true,
       "licence": {
-        "source": "Vision Language Model (API-backed for MVP)",
+        "source": "Qwen/Qwen2.5-VL-3B-Instruct",
         "verified": true,
-        "notes": "Shares the SatVLM adapter — handles answer composition for change and fusion tasks."
+        "notes": "Shares the local SatVLM adapter for grounded evidence composition."
       },
       "notes": "Composes the final answer from structured evidence for change and land-cover tasks."
     },
@@ -95,18 +95,14 @@
     {
       "internal_name": "SAR-FuseSeg",
       "model_name": "ResNet18 dual-encoder U-Net (optical + SAR)",
-      "version": "fuseseg-v0",
       "version": "V3",
       "role": "primary_specialist",
-      "status": "not_implemented",
       "status": "available",
       "permitted": true,
       "tasks": ["optical_sar_land_cover"],
-      "preprocessing_version": "sar-fuseseg-preprocess-v1",
       "preprocessing_version": "sar_fuse_v3_preprocess",
       "calibration_version": null,
       "adapter_ref": "app.models.sar_fuseseg_adapter.SarFuseSegAdapter",
-      "requires_gpu": true,
       "requires_gpu": false,
       "resident": false,
       "licence": {
