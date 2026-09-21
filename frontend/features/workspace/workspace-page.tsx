@@ -30,6 +30,7 @@ import { SatIcon } from '@/components/site/sat-icon';
 import { Button } from '@/components/ui/button';
 import { useAnalysis } from '@/hooks/use-analysis';
 import {
+  type AnalysisResult,
   type AnalysisStage,
   type AnalysisSummary,
   type ClarificationPayload,
@@ -63,6 +64,17 @@ type Stage =
 type FileRole = 'before' | 'after' | 'optical' | 'sar' | 'single' | 'unknown';
 type Modality = 'optical' | 'sar' | 'other';
 
+type ChatMessage = {
+  id: string;
+  role: 'user' | 'assistant';
+  text: string;
+  files?: UploadItem[];
+  analysisId?: string;
+  result?: AnalysisResult | null;
+  stage?: Stage;
+  error?: string | null;
+};
+
 type ChatHistoryItem = {
   id: string;
   title: string;
@@ -76,6 +88,7 @@ const analysisStages = [
   { key: 'validating', label: 'Reading imagery and metadata', detail: 'Checking format, spatial bounds, acquisition timestamps, and resolution.' },
   { key: 'routing',    label: 'Interpreting your question',   detail: 'Constrained router selecting the specialist workflow (ChangeNet, SatVLM, SAR-FuseSeg).' },
   { key: 'inference',  label: 'Evaluating spatial patterns',  detail: 'Running GPU specialist inference with CUDA 12.8 acceleration.' },
+  { key: 'inference',  label: 'Evaluating spatial patterns',  detail: 'Running GPU specialist inference with CUDA acceleration.' },
   { key: 'evidence',   label: 'Building the evidence trace',  detail: 'Deterministic metric polygonization, UTM area projection, and confidence gating.' },
 ] as const;
 
@@ -131,6 +144,11 @@ export function WorkspacePage() {
   const fileInput = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Multi-turn conversation state: one persistent thread_id per session
+  const [threadId, setThreadId] = useState<string>(() => `thread_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [activeUploadIds, setActiveUploadIds] = useState<string[]>([]);
+
   const [files, setFiles] = useState<UploadItem[]>([]);
   const [query, setQuery] = useState('');
   const [submittedQuery, setSubmittedQuery] = useState('');
@@ -154,12 +172,7 @@ export function WorkspacePage() {
 
   const { status: analysisStatus, result: analysisResult, refresh } = useAnalysis(analysisId);
 
-  useEffect(() => {
-    satqueryApi
-      .health()
-      .then((health) => setBackendStatus(health.status === 'ok' ? 'connected' : 'degraded'))
-      .catch(() => setBackendStatus('offline'));
-
+  const loadHistory = () => {
     setHistoryLoading(true);
     satqueryApi
       .listAnalyses(50, 0)
@@ -183,38 +196,83 @@ export function WorkspacePage() {
       .finally(() => {
         setHistoryLoading(false);
       });
-  }, []);
+  };
 
   useEffect(() => {
-    if (!analysisStatus) return;
+    satqueryApi
+      .health()
+      .then((health) => setBackendStatus(health.status === 'ok' ? 'connected' : 'degraded'))
+      .catch(() => setBackendStatus('offline'));
+
+    loadHistory();
+  }, []);
+
+  // Update assistant message state as the analysis pipeline progresses
+  useEffect(() => {
+    if (!analysisStatus || !analysisId) return;
+
     if (analysisStatus.status === 'completed') {
       setStage('complete');
       setClarification(null);
+      if (analysisResult) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.analysisId === analysisId
+              ? {
+                  ...m,
+                  stage: 'complete',
+                  text: analysisResult.answer || 'Analysis complete.',
+                  result: analysisResult,
+                }
+              : m
+          )
+        );
+        loadHistory();
+      }
     } else if (analysisStatus.status === 'failed') {
+      const errStr = analysisStatus.error?.message ?? analysisStatus.message ?? 'The analysis failed.';
       setStage('failed');
-      setNotice(analysisStatus.error?.message ?? analysisStatus.message ?? 'The analysis failed.');
+      setNotice(errStr);
+      setMessages((prev) =>
+        prev.map((m) => (m.analysisId === analysisId ? { ...m, stage: 'failed', error: errStr } : m))
+      );
     } else if (analysisStatus.status === 'needs_clarification') {
       const next = analysisStatus.clarification ?? null;
       setStage('clarification');
       setClarification(next);
       if (next) {
-        setRoles(Object.fromEntries(next.upload_ids.map((id, index) => [id, next.allowed_roles[index] ?? next.allowed_roles[0] ?? 'unknown'])) as Record<string, FileRole>);
-        setModalities(Object.fromEntries(next.upload_ids.map((id, index) => [id, index === 0 ? 'optical' : 'sar'])) as Record<string, Modality>);
         setClarifiedQuestion(submittedQuery);
+        setRoles(
+          Object.fromEntries(
+            next.upload_ids.map((id, index) => [
+              id,
+              next.allowed_roles[index] ?? next.allowed_roles[0] ?? 'unknown',
+            ])
+          ) as Record<string, FileRole>
+        );
+        setModalities(
+          Object.fromEntries(
+            next.upload_ids.map((id, index) => [id, index === 0 ? 'optical' : 'sar'])
+          ) as Record<string, Modality>
+        );
       }
     } else {
-      setStage(stageFromBackend(analysisStatus.stage));
+      const curStage = stageFromBackend(analysisStatus.stage);
+      setStage(curStage);
+      setMessages((prev) =>
+        prev.map((m) => (m.analysisId === analysisId ? { ...m, stage: curStage } : m))
+      );
     }
-  }, [analysisStatus, submittedQuery]);
+  }, [analysisStatus, analysisResult, analysisId, submittedQuery]);
 
   const running = !['idle', 'complete', 'clarification', 'failed'].includes(stage);
-  const conversationStarted = Boolean(submittedQuery);
+  const conversationStarted = messages.length > 0;
 
   const inputMode = useMemo(() => {
-    if (!files.length) return 'Waiting for imagery';
-    if (files.length === 1) return 'Single-scene observation';
-    return (submittedQuery || query).toLowerCase().includes('change') ? 'Bi-temporal comparison' : 'Optical + SAR fusion';
-  }, [files.length, query, submittedQuery]);
+    if (!files.length && !activeUploadIds.length) return 'Waiting for imagery';
+    if (files.length === 1 || activeUploadIds.length === 1) return 'Single-scene observation';
+    return query.toLowerCase().includes('change') ? 'Bi-temporal comparison' : 'Optical + SAR fusion';
+  }, [files.length, activeUploadIds.length, query]);
 
   const currentStageIndex = analysisStages.findIndex((item) => item.key === stage);
   const currentStage = analysisStages[Math.max(currentStageIndex, 0)];
@@ -250,31 +308,120 @@ export function WorkspacePage() {
     if (event.dataTransfer.files) addFiles(event.dataTransfer.files);
   };
 
-  const handleHistoryClick = (item: ChatHistoryItem) => {
+  // Sidebar history click: load previous mission into conversation view (keeps user on Chat page!)
+  const handleHistoryClick = async (item: ChatHistoryItem) => {
     setActiveItemId(item.id);
-    if (!item.isSample) router.push(`/analysis/${item.id}`);
+    if (item.isSample) return;
+
+    try {
+      const res = await satqueryApi.analysisResult(item.id);
+      setThreadId(item.id);
+      setAnalysisId(item.id);
+      if (res.upload_ids && res.upload_ids.length > 0) {
+        setActiveUploadIds(res.upload_ids);
+      }
+      const userMsg: ChatMessage = {
+        id: `hist_user_${item.id}`,
+        role: 'user',
+        text: res.question || item.title,
+      };
+      const assistantMsg: ChatMessage = {
+        id: `hist_asst_${item.id}`,
+        role: 'assistant',
+        text: res.answer || '',
+        stage: 'complete',
+        analysisId: res.analysis_id,
+        result: res,
+      };
+      setMessages([userMsg, assistantMsg]);
+      setStage('complete');
+    } catch {
+      // Fallback navigation if result cannot be loaded directly
+      router.push(`/analysis/${item.id}`);
+    }
   };
 
   const resetConversation = () => {
     files.forEach((f) => { if (f.previewUrl) URL.revokeObjectURL(f.previewUrl); });
-    setFiles([]); setQuery(''); setSubmittedQuery(''); setStage('idle');
-    setAnalysisId(''); setClarification(null); setNotice(null); setWarnings([]); setActiveItemId('');
+    setFiles([]);
+    setActiveUploadIds([]);
+    setQuery('');
+    setSubmittedQuery('');
+    setStage('idle');
+    setAnalysisId('');
+    setClarification(null);
+    setNotice(null);
+    setWarnings([]);
+    setActiveItemId('');
+    setMessages([]);
+    // Generate one fresh thread_id for the next chat
+    setThreadId(`thread_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
   };
 
+  // Sends a query (initial or follow-up) in the same conversation thread
   const startAnalysis = async () => {
-    if (!files.length || !query.trim()) return;
+    if (!query.trim()) return;
+    if (!files.length && !activeUploadIds.length) return;
+
     const q = query.trim();
-    setSubmittedQuery(q); setStage('uploading'); setNotice(null); setWarnings([]);
+    setSubmittedQuery(q);
+    const userMsgId = `user_${Date.now()}`;
+    const assistantMsgId = `assistant_${Date.now()}`;
+
+    const userMsg: ChatMessage = {
+      id: userMsgId,
+      role: 'user',
+      text: q,
+      files: files.length > 0 ? [...files] : undefined,
+    };
+    const assistantMsg: ChatMessage = {
+      id: assistantMsgId,
+      role: 'assistant',
+      text: '',
+      stage: 'uploading',
+    };
+
+    setMessages((prev) => [...prev, userMsg, assistantMsg]);
+    setQuery('');
+    setStage('uploading');
+    setNotice(null);
+    setWarnings([]);
+
     try {
-      const uploadRes = await satqueryApi.upload(files.map((f) => f.file));
-      const uploadIds = uploadRes.uploads.map((u) => u.upload_id);
+      let uploadIds = activeUploadIds;
+      // Upload any new files that don't have an uploadId yet
+      const unuploaded = files.filter((f) => !f.uploadId);
+      if (unuploaded.length > 0) {
+        const uploadRes = await satqueryApi.upload(files.map((f) => f.file));
+        uploadIds = uploadRes.uploads.map((u) => u.upload_id);
+        setActiveUploadIds(uploadIds);
+        setFiles((prev) =>
+          prev.map((f, i) => ({ ...f, uploadId: uploadIds[i] ?? f.uploadId }))
+        );
+      }
+
       setStage('validating');
-      const analysis = await satqueryApi.createAnalysis(uploadIds, q);
+      // Pass the persistent thread_id so LangGraph reuses memory and prior messages
+      const analysis = await satqueryApi.createAnalysis(uploadIds, q, threadId);
       setAnalysisId(analysis.analysis_id);
+
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantMsgId
+            ? { ...m, analysisId: analysis.analysis_id, stage: 'routing' }
+            : m
+        )
+      );
       setStage('routing');
     } catch (error) {
+      const errStr = requestError(error);
       setStage('failed');
-      setNotice(requestError(error));
+      setNotice(errStr);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantMsgId ? { ...m, stage: 'failed', error: errStr } : m
+        )
+      );
     }
   };
 
@@ -298,7 +445,10 @@ export function WorkspacePage() {
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void startAnalysis(); }
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      void startAnalysis();
+    }
   };
 
   const todayItems    = historyItems.filter((it) => it.section === 'Today');
@@ -421,145 +571,161 @@ export function WorkspacePage() {
               </div>
             ) : (
               <div className="chat-messages">
-                <article className="chat-message chat-message-user">
-                  <div className="chat-message-label">You</div>
-                  <div className="chat-user-bubble">
-                    <p>{submittedQuery}</p>
-                    {files.length > 0 && (
-                      <div className="chat-inline-files">
-                        {files.map((file) => (
-                          <span key={file.id}><FileImage aria-hidden="true" /><span>{file.name}<small>{file.size}</small></span></span>
-                        ))}
+                {messages.map((msg) =>
+                  msg.role === 'user' ? (
+                    <article className="chat-message chat-message-user" key={msg.id}>
+                      <div className="chat-message-label">You</div>
+                      <div className="chat-user-bubble">
+                        <p>{msg.text}</p>
+                        {msg.files && msg.files.length > 0 && (
+                          <div className="chat-inline-files">
+                            {msg.files.map((file) => (
+                              <span key={file.id}>
+                                <FileImage aria-hidden="true" />
+                                <span>{file.name}<small>{file.size}</small></span>
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                </article>
-
-                <article className="chat-message chat-message-assistant" aria-live="polite">
-                  <div className="chat-assistant-avatar" aria-hidden="true"><SatIcon /></div>
-                  <div className="chat-assistant-content">
-                    {stage === 'complete' ? (
-                      <div className="chat-analysis-ready">
-                        <span className="ready-label"><Check />Analysis complete</span>
-                        {analysisResult?.answer ? (
-                          <div className="chat-grounded-box mt-3 mb-2 rounded-xl border border-[var(--border)] bg-[#101316] p-4 text-[#dfe2e1]">
-                            <div className="flex items-center gap-2 mb-2 text-xs font-semibold text-[var(--solar-foil)]">
-                              <Radar className="h-4 w-4" />
-                              <span>Grounded Specialist Answer</span>
+                    </article>
+                  ) : (
+                    <article className="chat-message chat-message-assistant" aria-live="polite" key={msg.id}>
+                      <div className="chat-assistant-avatar" aria-hidden="true"><SatIcon /></div>
+                      <div className="chat-assistant-content">
+                        {msg.stage === 'complete' ? (
+                          <div className="chat-analysis-ready">
+                            <span className="ready-label"><Check />Analysis complete</span>
+                            {msg.result?.answer ? (
+                              <div className="chat-grounded-box mt-3 mb-2 rounded-xl border border-[var(--border)] bg-[#101316] p-4 text-[#dfe2e1]">
+                                <div className="flex items-center gap-2 mb-2 text-xs font-semibold text-[var(--solar-foil)]">
+                                  <Radar className="h-4 w-4" />
+                                  <span>Grounded Specialist Answer</span>
+                                </div>
+                                <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.result.answer}</p>
+                              </div>
+                            ) : (
+                              <h2>Your evidence package is ready.</h2>
+                            )}
+                            <p className="text-xs text-[#858e92]">The response contains spatial artifacts, specialist confidence, warnings, and execution trace.</p>
+                            <div className="chat-result-summary">
+                              <div><span>Route</span><strong>{msg.result?.task?.replaceAll('_', ' ') ?? inputMode}</strong></div>
+                              <div><span>Evidence ID</span><strong>{msg.analysisId}</strong></div>
+                              {msg.result?.evidence?.area_value != null && (
+                                <div><span>Measured Area</span><strong>{msg.result.evidence.area_value.toLocaleString('en-IN', { maximumFractionDigits: 2 })} {msg.result.evidence.area_unit ?? 'm²'}</strong></div>
+                              )}
+                              {msg.result?.confidence?.decision && (
+                                <div><span>Decision</span><strong>{msg.result.confidence.decision}</strong></div>
+                              )}
                             </div>
-                            <p className="text-sm leading-relaxed whitespace-pre-wrap">{analysisResult.answer}</p>
+                            <div className="flex flex-wrap items-center gap-2 pt-1">
+                              {msg.analysisId && (
+                                <Link
+                                  href={`/analysis/${msg.analysisId}`}
+                                  className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--starlight)] px-4 py-2 text-xs font-semibold text-[var(--void)] hover:opacity-90 transition-opacity shadow-sm"
+                                >
+                                  <Radar className="h-3.5 w-3.5" /> View Analysis <ChevronRight className="h-3.5 w-3.5" />
+                                </Link>
+                              )}
+                              {msg.analysisId && (
+                                <>
+                                  <Button variant="outline" size="sm" onClick={() => window.open(satqueryApi.reportUrl(msg.analysisId!, 'html', false), '_blank', 'noopener,noreferrer')}>
+                                    View Report (HTML)
+                                  </Button>
+                                  <Button variant="outline" size="sm" onClick={() => { window.location.href = satqueryApi.reportUrl(msg.analysisId!, 'pdf', true); }}>
+                                    <Download className="mr-1.5 h-3.5 w-3.5" /> Download PDF
+                                  </Button>
+                                  <Button variant="outline" size="sm" onClick={() => { window.location.href = satqueryApi.reportUrl(msg.analysisId!, 'json', true); }}>
+                                    <Download className="mr-1.5 h-3.5 w-3.5" /> JSON
+                                  </Button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        ) : msg.stage === 'clarification' && clarification ? (
+                          <div className="chat-clarification">
+                            <span className="ready-label"><AlertTriangle />Clarification required</span>
+                            <h2>The backend needs one detail.</h2>
+                            <p>{clarification.question}</p>
+                            {clarification.missing_fields.includes('file_roles') && clarification.upload_ids.map((uploadId, index) => (
+                              <label key={uploadId}>
+                                <span>{files[index]?.name ?? uploadId}</span>
+                                <select value={roles[uploadId] ?? 'unknown'} onChange={(e) => setRoles((c) => ({ ...c, [uploadId]: e.target.value as FileRole }))}>
+                                  {clarification.allowed_roles.map((role) => <option key={role} value={role}>{role}</option>)}
+                                </select>
+                              </label>
+                            ))}
+                            {clarification.missing_fields.includes('modality') && clarification.upload_ids.map((uploadId, index) => (
+                              <label key={`modality-${uploadId}`}>
+                                <span>{files[index]?.name ?? uploadId} modality</span>
+                                <select value={modalities[uploadId] ?? 'other'} onChange={(e) => setModalities((c) => ({ ...c, [uploadId]: e.target.value as Modality }))}>
+                                  <option value="optical">Optical</option><option value="sar">SAR</option><option value="other">Other</option>
+                                </select>
+                              </label>
+                            ))}
+                            {clarification.missing_fields.includes('before_date') && (
+                              <label><span>Before date</span><input type="date" value={beforeDate} onChange={(e) => setBeforeDate(e.target.value)} /></label>
+                            )}
+                            {clarification.missing_fields.includes('after_date') && (
+                              <label><span>After date</span><input type="date" value={afterDate} onChange={(e) => setAfterDate(e.target.value)} /></label>
+                            )}
+                            {clarification.missing_fields.includes('question_intent') && (
+                              <label><span>Clarified question</span><input value={clarifiedQuestion} onChange={(e) => setClarifiedQuestion(e.target.value)} /></label>
+                            )}
+                            <Button onClick={() => void submitClarification()}>Resume analysis <ChevronRight /></Button>
+                          </div>
+                        ) : msg.stage === 'failed' ? (
+                          <div className="chat-failure">
+                            <span><AlertTriangle />Analysis stopped</span>
+                            <h2>The request could not be completed.</h2>
+                            <p>{msg.error || notice}</p>
+                            <Button variant="outline" onClick={resetConversation}>Start a new analysis</Button>
                           </div>
                         ) : (
-                          <h2>Your evidence package is ready.</h2>
+                          <>
+                            <div className="chat-thinking-title">
+                              <strong>{currentStage?.label}</strong>
+                              <span><i /><i /><i /></span>
+                            </div>
+                            <p>{analysisStatus?.message ?? currentStage?.detail}</p>
+                            <ol className="analysis-trace">
+                              {analysisStages.map((item, index) => {
+                                const complete = index < currentStageIndex;
+                                const current = index === currentStageIndex;
+                                return (
+                                  <li key={item.key} className={complete ? 'is-complete' : current ? 'is-current' : ''}>
+                                    <span>{complete ? <Check /> : current ? <LoaderCircle /> : <i />}</span>
+                                    <div><strong>{item.label}</strong><small>{item.detail}</small></div>
+                                  </li>
+                                );
+                              })}
+                            </ol>
+                          </>
                         )}
-                        <p className="text-xs text-[#858e92]">The response contains spatial artifacts, specialist confidence, warnings, and execution trace.</p>
-                        <div className="chat-result-summary">
-                          <div><span>Route</span><strong>{analysisStatus?.task?.replaceAll('_', ' ') ?? inputMode}</strong></div>
-                          <div><span>Evidence ID</span><strong>{analysisId}</strong></div>
-                          {analysisResult?.evidence?.area_value != null && (
-                            <div><span>Measured Area</span><strong>{analysisResult.evidence.area_value.toLocaleString('en-IN', { maximumFractionDigits: 2 })} {analysisResult.evidence.area_unit ?? 'm²'}</strong></div>
-                          )}
-                          {analysisResult?.confidence?.decision && (
-                            <div><span>Decision</span><strong>{analysisResult.confidence.decision}</strong></div>
-                          )}
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2 pt-1">
-                          <Link href={`/analysis/${analysisId}`} className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--starlight)] px-3.5 py-2 text-xs font-semibold text-[var(--void)] hover:opacity-90 transition-opacity">
-                            Open interactive map <ChevronRight className="h-3.5 w-3.5" />
-                          </Link>
-                          <Button variant="outline" size="sm" onClick={() => window.open(satqueryApi.reportUrl(analysisId, 'html', false), '_blank', 'noopener,noreferrer')}>
-                            View Report (HTML)
-                          </Button>
-                          <Button variant="outline" size="sm" onClick={() => { window.location.href = satqueryApi.reportUrl(analysisId, 'pdf', true); }}>
-                            <Download className="mr-1.5 h-3.5 w-3.5" /> Download PDF
-                          </Button>
-                          <Button variant="outline" size="sm" onClick={() => { window.location.href = satqueryApi.reportUrl(analysisId, 'json', true); }}>
-                            <Download className="mr-1.5 h-3.5 w-3.5" /> JSON
-                          </Button>
-                        </div>
-                      </div>
-                    ) : stage === 'clarification' && clarification ? (
-                      <div className="chat-clarification">
-                        <span className="ready-label"><AlertTriangle />Clarification required</span>
-                        <h2>The backend needs one detail.</h2>
-                        <p>{clarification.question}</p>
-                        {clarification.missing_fields.includes('file_roles') && clarification.upload_ids.map((uploadId, index) => (
-                          <label key={uploadId}>
-                            <span>{files[index]?.name ?? uploadId}</span>
-                            <select value={roles[uploadId] ?? 'unknown'} onChange={(e) => setRoles((c) => ({ ...c, [uploadId]: e.target.value as FileRole }))}>
-                              {clarification.allowed_roles.map((role) => <option key={role} value={role}>{role}</option>)}
-                            </select>
-                          </label>
-                        ))}
-                        {clarification.missing_fields.includes('modality') && clarification.upload_ids.map((uploadId, index) => (
-                          <label key={`modality-${uploadId}`}>
-                            <span>{files[index]?.name ?? uploadId} modality</span>
-                            <select value={modalities[uploadId] ?? 'other'} onChange={(e) => setModalities((c) => ({ ...c, [uploadId]: e.target.value as Modality }))}>
-                              <option value="optical">Optical</option><option value="sar">SAR</option><option value="other">Other</option>
-                            </select>
-                          </label>
-                        ))}
-                        {clarification.missing_fields.includes('before_date') && (
-                          <label><span>Before date</span><input type="date" value={beforeDate} onChange={(e) => setBeforeDate(e.target.value)} /></label>
+                        {warnings.length > 0 && stage !== 'failed' && (
+                          <div className="chat-backend-notice">
+                            <AlertTriangle /><span><strong>{warnings.length} backend notice{warnings.length > 1 ? 's' : ''}</strong>{warnings[0].message}</span>
+                          </div>
                         )}
-                        {clarification.missing_fields.includes('after_date') && (
-                          <label><span>After date</span><input type="date" value={afterDate} onChange={(e) => setAfterDate(e.target.value)} /></label>
+                        {notice && stage === 'clarification' && (
+                          <div className="chat-backend-notice is-error"><AlertTriangle /><span>{notice}</span></div>
                         )}
-                        {clarification.missing_fields.includes('question_intent') && (
-                          <label><span>Clarified question</span><input value={clarifiedQuestion} onChange={(e) => setClarifiedQuestion(e.target.value)} /></label>
-                        )}
-                        <Button onClick={() => void submitClarification()}>Resume analysis <ChevronRight /></Button>
                       </div>
-                    ) : stage === 'failed' ? (
-                      <div className="chat-failure">
-                        <span><AlertTriangle />Analysis stopped</span>
-                        <h2>The request could not be completed.</h2>
-                        <p>{notice}</p>
-                        <Button variant="outline" onClick={resetConversation}>Start a new analysis</Button>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="chat-thinking-title">
-                          <strong>{currentStage?.label}</strong>
-                          <span><i /><i /><i /></span>
-                        </div>
-                        <p>{analysisStatus?.message ?? currentStage?.detail}</p>
-                        <ol className="analysis-trace">
-                          {analysisStages.map((item, index) => {
-                            const complete = index < currentStageIndex;
-                            const current = index === currentStageIndex;
-                            return (
-                              <li key={item.key} className={complete ? 'is-complete' : current ? 'is-current' : ''}>
-                                <span>{complete ? <Check /> : current ? <LoaderCircle /> : <i />}</span>
-                                <div><strong>{item.label}</strong><small>{item.detail}</small></div>
-                              </li>
-                            );
-                          })}
-                        </ol>
-                      </>
-                    )}
-                    {warnings.length > 0 && stage !== 'failed' && (
-                      <div className="chat-backend-notice">
-                        <AlertTriangle /><span><strong>{warnings.length} backend notice{warnings.length > 1 ? 's' : ''}</strong>{warnings[0].message}</span>
-                      </div>
-                    )}
-                    {notice && stage === 'clarification' && (
-                      <div className="chat-backend-notice is-error"><AlertTriangle /><span>{notice}</span></div>
-                    )}
-                  </div>
-                </article>
+                    </article>
+                  )
+                )}
               </div>
             )}
           </div>
 
           <div className="chat-dock">
-            {files.length > 0 && !conversationStarted && (
+            {files.length > 0 && (
               <div className="chat-dock-files">
                 {files.map((file) => (
                   <div className="chat-dock-file" key={file.id}>
                     {file.previewUrl ? <img src={file.previewUrl} alt="" /> : <FileImage aria-hidden="true" />}
                     <div><strong>{file.name}</strong><span>{file.type} · {file.size}</span></div>
-                    <button aria-label={`Remove ${file.name}`} onClick={() => removeFile(file.id)}><X /></button>
+                    {!running && <button aria-label={`Remove ${file.name}`} onClick={() => removeFile(file.id)}><X /></button>}
                   </div>
                 ))}
               </div>
@@ -571,17 +737,28 @@ export function WorkspacePage() {
               onDragOver={(e) => e.preventDefault()}
               onDrop={handleDrop}
             >
-              <button className="dock-attach-btn" aria-label="Attach satellite imagery" disabled={conversationStarted || files.length >= 2} onClick={() => fileInput.current?.click()}>
+              <button
+                className="dock-attach-btn"
+                aria-label="Attach satellite imagery"
+                disabled={running || files.length >= 2}
+                onClick={() => fileInput.current?.click()}
+              >
                 <Paperclip aria-hidden="true" />
               </button>
               <textarea
                 ref={textareaRef}
                 className="dock-input"
                 value={query}
-                disabled={conversationStarted}
+                disabled={running}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder={conversationStarted ? 'Start a new chat to analyse another scene' : 'Ask a question about the attached imagery...'}
+                placeholder={
+                  running
+                    ? 'Analyzing scene...'
+                    : conversationStarted
+                    ? 'Ask a follow-up question about this scene...'
+                    : 'Ask a question about the attached imagery...'
+                }
                 maxLength={400}
                 aria-label="Analysis question"
                 rows={1}
@@ -589,7 +766,7 @@ export function WorkspacePage() {
               <button
                 className="dock-send-btn"
                 aria-label="Send question"
-                disabled={!files.length || !query.trim() || running || conversationStarted || backendStatus === 'offline'}
+                disabled={(!files.length && !activeUploadIds.length) || !query.trim() || running || backendStatus === 'offline'}
                 onClick={() => void startAnalysis()}
               >
                 <ArrowUp aria-hidden="true" />
@@ -597,7 +774,7 @@ export function WorkspacePage() {
             </div>
             <div className="chat-dock-meta">
               <div className="flex items-center gap-1.5">
-                <span>Attach up to two scenes</span>
+                <span>{conversationStarted ? 'Multi-turn conversation active' : 'Attach up to two scenes'}</span>
                 <Info className="h-3 w-3 text-[#727c82]" />
               </div>
               <div className="flex items-center gap-2">
@@ -623,11 +800,11 @@ export function WorkspacePage() {
               </div>
               <div className="flex items-start gap-3 rounded-xl border border-[var(--border)] bg-[#111417] p-4">
                 <Cpu className="mt-0.5 h-4 w-4 text-[var(--solar-foil)]" />
-                <div><strong className="block font-medium text-[#dfe2e1]">GPU Compute</strong><span>RTX 4050 Laptop · CUDA 12.8 · PyTorch 2.11</span></div>
+                <div><strong className="block font-medium text-[#dfe2e1]">GPU Compute</strong><span>CUDA Accelerated Inference</span></div>
               </div>
               <div className="flex items-start gap-3 rounded-xl border border-[var(--border)] bg-[#111417] p-4">
                 <ShieldCheck className="mt-0.5 h-4 w-4 text-[var(--solar-foil)]" />
-                <div><strong className="block font-medium text-[#dfe2e1]">LangGraph Pipeline</strong><span>SatVLM · ChangeNet · SAR-FuseSeg · Evidence Engine</span></div>
+                <div><strong className="block font-medium text-[#dfe2e1]">LangGraph Pipeline</strong><span>Multi-turn memory · SatVLM · ChangeNet · SAR-FuseSeg</span></div>
               </div>
               <div className="flex items-start gap-3 rounded-xl border border-[var(--border)] bg-[#111417] p-4">
                 <Info className="mt-0.5 h-4 w-4 text-[var(--solar-foil)]" />

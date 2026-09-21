@@ -29,10 +29,12 @@ class SemanticSupport(str, Enum):
 class QueryRequirements(BaseModel):
     """Deterministic requirements extracted from user query and intent."""
     schema_version: str = "query_requirements_v1"
-    rules_version: str = "interpretation_rules_v1"
+    rules_version: str = "interpretation_rules_v2"
     required_evidence_types: List[str] = Field(default_factory=list)
     required_facts: List[str] = Field(default_factory=list)
     requires_quantitative: bool = False
+    requires_landcover_presence: bool = False
+    referenced_classes: List[str] = Field(default_factory=list)
     requires_geospatial: bool = False
     requires_semantic_transition: bool = False
     semantic_transition_from: Optional[str] = None
@@ -79,16 +81,21 @@ _RE_CONFIDENCE_RELEVANT = re.compile(
     re.IGNORECASE,
 )
 
+_RE_PRESENCE = re.compile(
+    r"\b(is\s+there|are\s+there|any\s+|presence\s+of|detect\s+any|exists?|find\s+any|contain\s+any|see\s+any)\b",
+    re.IGNORECASE,
+)
+
 # Known semantic landcover classes
 _LANDCOVER_CLASSES = {
     "built_up": ["built-up", "built_up", "building", "buildings", "urban", "infrastructure", "developed", "city"],
-    "water": ["water", "river", "lake", "ocean", "sea", "pond", "reservoir", "water body"],
+    "water": ["water", "river", "lake", "ocean", "sea", "pond", "reservoir", "water body", "wetland"],
     "vegetation": ["vegetation", "forest", "tree", "trees", "crop", "cropland", "grass", "greenery", "agriculture"],
 }
 
 
 def extract_query_requirements(query: str, hints: Optional[Dict[str, Any]] = None) -> QueryRequirements:
-    """Deterministically extracts QueryRequirements from user query using rules_version: interpretation_rules_v1.
+    """Deterministically extracts QueryRequirements from user query using rules_version: interpretation_rules_v2.
 
     Zero LLM or SatVLM involvement. Fully unit-testable.
     Conservative fallback: Unanticipated/unrecognized non-qualitative phrasings enforce evidence requirements.
@@ -99,6 +106,7 @@ def extract_query_requirements(query: str, hints: Optional[Dict[str, Any]] = Non
     requires_quant = bool(_RE_QUANTITATIVE.search(query))
     requires_geo = bool(_RE_GEOSPATIAL.search(query))
     is_explicit_qualitative = bool(_RE_EXPLICIT_QUALITATIVE.search(query))
+    is_presence = bool(_RE_PRESENCE.search(query))
 
     # Check uncalibrated dependency
     if _RE_CONFIDENCE_REQUIRED.search(query):
@@ -133,6 +141,9 @@ def extract_query_requirements(query: str, hints: Optional[Dict[str, Any]] = Non
         if any(re.search(rf"\b{re.escape(alias)}\b", query_for_landcover) for alias in aliases):
             targeted_classes.append(canonical_name)
 
+    referenced_classes = list(dict.fromkeys(targeted_classes))
+    requires_presence = is_presence and bool(referenced_classes)
+
     # Required evidence types & required facts
     required_types = []
     required_facts = []
@@ -146,10 +157,16 @@ def extract_query_requirements(query: str, hints: Optional[Dict[str, Any]] = Non
 
     # Check for landcover / single-scene intent
     if targeted_classes or hints.get("intent") in {"land_cover", "segmentation", "scene_classification"}:
-        if requires_quant or not is_explicit_qualitative:
+        if requires_quant:
             required_types.append("LandCoverFacts")
             for cls_name in targeted_classes:
                 required_facts.append(f"{cls_name}_percentage")
+        elif requires_presence:
+            required_types.append("LandCoverFacts")
+            for cls_name in targeted_classes:
+                required_facts.append(f"{cls_name}_presence")
+        elif not is_explicit_qualitative:
+            required_types.append("LandCoverFacts")
 
     # If semantic transition is requested, CrossModelFacts or temporal LandCoverFacts required
     if requires_semantic:
@@ -158,7 +175,7 @@ def extract_query_requirements(query: str, hints: Optional[Dict[str, Any]] = Non
     # ─── Conservative Fallback for Unrecognized / Unanticipated Phrasings ────
     # If the query is NOT explicitly qualitative and no specific evidence types were matched,
     # conservatively treat it as requiring verified specialist evidence (never silent zero-evidence ACCEPT).
-    if not required_types and not is_explicit_qualitative:
+    if not required_types and not is_explicit_qualitative and not requires_presence:
         requires_quant = True
         if hints.get("is_temporal") or is_change:
             required_types.append("ChangeFacts")
@@ -169,10 +186,12 @@ def extract_query_requirements(query: str, hints: Optional[Dict[str, Any]] = Non
 
     return QueryRequirements(
         schema_version="query_requirements_v1",
-        rules_version="interpretation_rules_v1",
+        rules_version="interpretation_rules_v2",
         required_evidence_types=list(dict.fromkeys(required_types)),
         required_facts=list(dict.fromkeys(required_facts)),
         requires_quantitative=requires_quant,
+        requires_landcover_presence=requires_presence,
+        referenced_classes=referenced_classes,
         requires_geospatial=requires_geo,
         requires_semantic_transition=requires_semantic,
         semantic_transition_from=from_cls,

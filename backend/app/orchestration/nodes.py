@@ -43,6 +43,7 @@ from app.db.repo import (
 from app.db.session import session_scope
 from app.models.base import AdapterRequest
 from app.models.changenet_adapter import ChangeNetAdapter
+from langchain_core.messages import AIMessage, HumanMessage
 from app.models.satvlm_adapter import SatVLMAdapter
 from app.orchestration.cache import compute_analysis_cache_key
 from app.orchestration.state import SatQueryState
@@ -251,6 +252,18 @@ def constrained_router_node(state: SatQueryState) -> Dict[str, Any]:
     specialists: list[str] = []
     task = "single_scene_vqa"
 
+    q_req = state.get("query_requirements") or {}
+    needs_landcover_presence = q_req.get("requires_landcover_presence") or bool(q_req.get("referenced_classes"))
+
+    # Check if inputs contain a compatible optical + SAR pair
+    is_compatible_optical_sar = False
+    if len(upload_ids) >= 2:
+        with session_scope() as session:
+            uploads = get_uploads(session, upload_ids)
+            mods = {str(u.modality).lower() for u in uploads if u.modality}
+            if "optical" in mods and "sar" in mods:
+                is_compatible_optical_sar = True
+
     # Enforce Rule 13: ChangeNet requires bi-temporal optical pair
     if workflow == "bi_temporal" or task_intent in {"change_detection", "detect_change", "locate_change", "quantify_change"}:
         if len(upload_ids) >= 2:
@@ -268,10 +281,12 @@ def constrained_router_node(state: SatQueryState) -> Dict[str, Any]:
             trace.append("change_detection_downgraded_single_image")
 
     # Enforce Rule 13: SAR-FuseSeg requires optical + SAR modalities
-    elif workflow == "optical_sar" or task_intent in {"land_cover", "list_land_cover", "fused_land_cover"}:
-        if len(upload_ids) >= 2:
+    elif workflow == "optical_sar" or task_intent in {"land_cover", "list_land_cover", "fused_land_cover"} or (needs_landcover_presence and is_compatible_optical_sar):
+        if len(upload_ids) >= 2 and (workflow == "optical_sar" or is_compatible_optical_sar):
             specialists = ["SAR-FuseSeg", "SatVLM"]
             task = "optical_sar_land_cover"
+            if needs_landcover_presence and is_compatible_optical_sar:
+                trace.append("sar_fuseseg_proactively_routed")
         else:
             specialists = ["SatVLM"]
             task = "single_scene_vqa"
@@ -281,6 +296,18 @@ def constrained_router_node(state: SatQueryState) -> Dict[str, Any]:
                 "message": "Multimodal land cover requested but pair is incomplete. Routed to single-scene inspection.",
             })
             trace.append("land_cover_downgraded_single_image")
+
+    elif needs_landcover_presence and not is_compatible_optical_sar:
+        # Optical-only image: SAR-FuseSeg cannot run; do not pretend its evidence exists.
+        specialists = ["SatVLM"]
+        task = "single_scene_vqa"
+        if q_req.get("requires_landcover_presence"):
+            warnings.append({
+                "code": "MISSING_CROSS_MODAL_PAIR",
+                "level": "warning",
+                "message": "Land-cover presence check requested but optical+SAR pair is incomplete. Routed to single-scene inspection.",
+            })
+            trace.append("landcover_presence_optical_only_no_classifier")
 
     else:
         specialists = ["SatVLM"]
@@ -463,22 +490,38 @@ def dispatch_specialist_node(state: SatQueryState) -> Dict[str, Any]:
                 satvlm_adapter.load()
                 work_dir = store.root / "work" / analysis_id
                 work_dir.mkdir(parents=True, exist_ok=True)
+                # Extract prior conversation history for multi-turn conversational context
+                prior_messages = state.get("messages", [])
+                chat_history: list[dict[str, str]] = []
+                current_q = state.get("question", "").strip()
+                for m in prior_messages:
+                    content = getattr(m, "content", "") if not isinstance(m, dict) else m.get("content", "")
+                    m_type = getattr(m, "type", "") if not isinstance(m, dict) else m.get("role", "")
+                    role = "user" if m_type in {"human", "user"} else "assistant"
+                    # Include prior completed turns, excluding the current pending question
+                    if content and content != current_q:
+                        chat_history.append({"role": role, "content": str(content)})
+
                 req = AdapterRequest(
                     analysis_id=analysis_id,
                     task=task,
                     question=state.get("question", ""),
                     bundle=bundle,
                     work_dir=work_dir,
+                    params={"chat_history": chat_history},
                 )
                 vlm_res = satvlm_adapter.infer(req)
+                vlm_detail = getattr(vlm_res, "detail", {}) or {}
                 specialist_results["SatVLM"] = sanitize_for_checkpoint(
                     {
                         "source": vlm_res.source,
                         "version": vlm_res.version,
                         "answer": vlm_res.answer,
+                        "raw_answer": vlm_detail.get("raw_answer") or vlm_res.answer,
                         "answer_status": vlm_res.answer_status,
                         "evidence_coverage": vlm_res.evidence_coverage,
                         "unsupported_claims": vlm_res.unsupported_claims,
+                        "detail": vlm_detail,
                         "trace": vlm_res.trace,
                         "warnings": [
                             w.model_dump() if hasattr(w, "model_dump") else w
@@ -657,8 +700,30 @@ def compose_response_node(state: SatQueryState) -> Dict[str, Any]:
     specialist_results = state.get("specialist_results", {})
     if task == "single_scene_vqa" and "SatVLM" in specialist_results and specialist_results["SatVLM"].get("answer"):
         trace.append("satvlm_scene_answer_reused")
+        satvlm_res = specialist_results["SatVLM"]
+        unsupported = satvlm_res.get("unsupported_claims", 0)
+        ans = satvlm_res.get("answer", "")
+        raw_ans = satvlm_res.get("raw_answer") or ans
+        conf = dict(state.get("confidence") or {})
+
+        if unsupported > 0:
+            trace.append("claim_validation_downgraded_to_warn")
+            conf["decision"] = "WARN"
+            conf["reason"] = f"Claim validation flagged {unsupported} unsupported/conflicting statement(s); response was sanitized."
+            return {
+                "raw_model_response": raw_ans,
+                "final_answer": ans,
+                "messages": [AIMessage(content=ans)],
+                "confidence": conf,
+                "status": AnalysisStatus.COMPLETED.value,
+                "stage": Stage.DONE.value,
+                "progress": 95,
+                "execution_trace": trace,
+            }
+
         return {
-            "final_answer": specialist_results["SatVLM"]["answer"],
+            "final_answer": ans,
+            "messages": [AIMessage(content=ans)],
             "status": AnalysisStatus.COMPLETED.value,
             "stage": Stage.DONE.value,
             "progress": 95,
@@ -686,6 +751,7 @@ def compose_response_node(state: SatQueryState) -> Dict[str, Any]:
     trace.append("compose_response_completed")
     return {
         "final_answer": answer,
+        "messages": [AIMessage(content=answer)],
         "status": AnalysisStatus.COMPLETED.value,
         "stage": Stage.DONE.value,
         "progress": 95,
@@ -732,8 +798,13 @@ def compose_response_with_warning_node(state: SatQueryState) -> Dict[str, Any]:
     specialist_results = state.get("specialist_results", {})
     if task == "single_scene_vqa" and "SatVLM" in specialist_results and specialist_results["SatVLM"].get("answer"):
         trace.append("satvlm_scene_answer_reused")
+        satvlm_res = specialist_results["SatVLM"]
+        ans = satvlm_res.get("answer", "")
+        raw_ans = satvlm_res.get("raw_answer") or ans
         return {
-            "final_answer": specialist_results["SatVLM"]["answer"],
+            "raw_model_response": raw_ans,
+            "final_answer": ans,
+            "messages": [AIMessage(content=ans)],
             "status": AnalysisStatus.COMPLETED.value,
             "stage": Stage.DONE.value,
             "progress": 95,
@@ -766,6 +837,7 @@ def compose_response_with_warning_node(state: SatQueryState) -> Dict[str, Any]:
     trace.append("compose_response_with_warning_completed")
     return {
         "final_answer": answer,
+        "messages": [AIMessage(content=answer)],
         "status": AnalysisStatus.COMPLETED.value,
         "stage": Stage.DONE.value,
         "progress": 95,
@@ -805,6 +877,7 @@ def abstention_response_node(state: SatQueryState) -> Dict[str, Any]:
 
     return {
         "final_answer": answer,
+        "messages": [AIMessage(content=answer)],
         "status": AnalysisStatus.COMPLETED.value,
         "stage": Stage.DONE.value,
         "progress": 100,

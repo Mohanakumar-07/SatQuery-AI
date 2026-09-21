@@ -67,6 +67,8 @@ class CreateAnalysisRequest(RequestModel):
     upload_ids: list[str] = Field(min_length=1, max_length=8)
     question: str = Field(min_length=1, max_length=_QUESTION_MAX)
     optional_hints: AnalysisHints | None = None
+    thread_id: str | None = Field(default=None, description="Optional LangGraph thread identifier for multi-turn chats.")
+    conversation_id: str | None = Field(default=None, description="Alias for thread_id.")
 
     @field_validator("question")
     @classmethod

@@ -340,9 +340,9 @@ export const satqueryApi = {
     method: 'POST',
     body: JSON.stringify({ upload_ids: uploadIds, question }),
   }),
-  createAnalysis: (uploadIds: string[], question: string) => request<AnalysisCreated>('/analyses', {
+  createAnalysis: (uploadIds: string[], question: string, threadId?: string) => request<AnalysisCreated>('/analyses', {
     method: 'POST',
-    body: JSON.stringify({ upload_ids: uploadIds, question }),
+    body: JSON.stringify({ upload_ids: uploadIds, question, thread_id: threadId }),
   }),
   listAnalyses: (limit = 100, offset = 0) => request<AnalysisListResponse>(`/analyses?limit=${limit}&offset=${offset}`),
   analysisStatus: (analysisId: string) => request<AnalysisStatusResponse>(`/analyses/${encodeURIComponent(analysisId)}/status`),

@@ -63,6 +63,7 @@ def create(
     from app.core.ids import new_id
 
     thread_id = new_id("thread")
+    thread_id = request.thread_id or request.conversation_id or new_id("thread")
     analysis = Analysis(
         id=new_id("analysis"),
         thread_id=thread_id,

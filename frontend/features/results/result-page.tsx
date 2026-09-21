@@ -25,8 +25,10 @@ function ResultState({ analysisId, title, message, error = false }: { analysisId
   return (
     <main className="app-shell result-shell">
       <SiteHeader mode="app" backHref="/history" backLabel="Analysis history" />
+      <SiteHeader mode="app" backHref="/workspace" backLabel="Back to Chat" />
       <div className="result-heading"><div><span className="section-kicker">Analysis / {analysisId}</span><h1>{title}</h1></div></div>
       <section className={`result-state-panel ${error ? 'is-error' : ''}`}>{error ? <AlertTriangle /> : <LoaderCircle className="spin-slow" />}<strong>{title}</strong><p>{message}</p><Link href="/history">Back to analysis history</Link></section>
+      <section className={`result-state-panel ${error ? 'is-error' : ''}`}>{error ? <AlertTriangle /> : <LoaderCircle className="spin-slow" />}<strong>{title}</strong><p>{message}</p><Link href="/workspace">Back to Chat</Link></section>
     </main>
   );
 }
@@ -86,12 +88,15 @@ export function ResultPage({ analysisId }: { analysisId: string }) {
   if (status?.status === 'failed') return <ResultState analysisId={analysisId} title="Analysis failed." message={status.error?.message ?? status.message ?? 'The backend stopped this analysis safely.'} error />;
   if (status?.status === 'needs_clarification' && status.clarification) {
     return <main className="app-shell result-shell"><SiteHeader mode="app" backHref="/history" backLabel="Analysis history" /><div className="result-heading"><div><span className="section-kicker">Analysis / {analysisId}</span><h1>Input clarification.</h1></div></div><ClarificationPanel clarification={status.clarification} onResume={async (payload) => { await satqueryApi.submitClarification(analysisId, payload); refresh(); }} /></main>;
+    return <main className="app-shell result-shell"><SiteHeader mode="app" backHref="/workspace" backLabel="Back to Chat" /><div className="result-heading"><div><span className="section-kicker">Analysis / {analysisId}</span><h1>Input clarification.</h1></div></div><ClarificationPanel clarification={status.clarification} onResume={async (payload) => { await satqueryApi.submitClarification(analysisId, payload); refresh(); }} /></main>;
   }
   if (!result) return <ResultState analysisId={analysisId} title={readable(status?.stage ?? 'Loading analysis')} message={status?.message ?? 'Reading analysis status from the local backend.'} />;
 
   const evidence = result.evidence;
   const overlayPath = evidence?.overlay?.url ?? result.artifacts.find((artifact) => artifact.kind === 'overlay' || artifact.kind === 'mask')?.url;
   const overlayUrl = overlayPath ? resolveBackendUrl(overlayPath) : null;
+  const primaryUploadId = result.upload_ids && result.upload_ids.length > 0 ? result.upload_ids[0] : null;
+  const baseImageUrl = primaryUploadId ? resolveBackendUrl(`/api/v1/uploads/${primaryUploadId}/file`) : null;
   const percent = evidence?.changed_percentage ?? evidence?.percentage;
   const regions = evidence?.regions ?? [];
   const coordinateLabel = evidence?.georeferenced ? evidence.measurement_crs ?? evidence.overlay?.crs ?? 'GEOREFERENCED EVIDENCE' : 'PIXEL-SPACE EVIDENCE';
@@ -99,10 +104,9 @@ export function ResultPage({ analysisId }: { analysisId: string }) {
 
   return (
     <main className="app-shell result-shell">
-      <SiteHeader mode="app" backHref="/history" backLabel="Analysis history" />
+      <SiteHeader mode="app" backHref="/workspace" backLabel="Back to Chat" />
       <div className="result-heading">
         <div><span className="section-kicker">Analysis complete / {analysisId}</span><h1>{readable(result.answer_type ?? result.task)}.</h1></div>
-        <div className="result-actions"><span className="complete-badge"><CircleCheck />{authoritative ? 'Completed' : 'Non-authoritative'}</span><Button variant="outline" onClick={() => window.open(satqueryApi.reportUrl(analysisId, 'html', false), '_blank', 'noopener,noreferrer')}>View report</Button><Button onClick={() => { window.location.href = satqueryApi.reportUrl(analysisId, 'json', true); }}><Download />Download JSON</Button></div>
         <div className="result-actions">
           <span className="complete-badge"><CircleCheck />{authoritative ? 'Completed' : 'Non-authoritative'}</span>
           <Button variant="outline" onClick={() => window.open(satqueryApi.reportUrl(analysisId, 'html', false), '_blank', 'noopener,noreferrer')}>View report</Button>
@@ -115,7 +119,7 @@ export function ResultPage({ analysisId }: { analysisId: string }) {
       <div className="result-grid">
         <section className="result-map-panel">
           <div className="map-toolbar"><div><Layers3 /><span>Spatial evidence</span></div><div className="layer-toggles"><button className="active"><Check />Base</button><button className={showMask ? 'active' : ''} onClick={() => setShowMask(!showMask)}><span className="toggle-swatch mask" />Mask</button><button className={showRegions ? 'active' : ''} onClick={() => setShowRegions(!showRegions)}><span className="toggle-swatch region" />Regions</button></div></div>
-          <SceneMap showMask={false} showRegions={false} overlayUrl={showMask ? overlayUrl : null} coordinateLabel={coordinateLabel} />
+          <SceneMap baseImageUrl={baseImageUrl} showMask={showMask} showRegions={showRegions} overlayUrl={showMask ? overlayUrl : null} coordinateLabel={coordinateLabel} />
           <div className="map-legend result-legend"><span><i className="legend-mask" />{overlayUrl ? 'Backend artifact' : 'No raster artifact'}</span><span><i className="legend-boundary" />{evidence?.georeferenced ? 'Geographic evidence' : 'Pixel-space evidence'}</span></div>
           {result.artifacts.length > 0 && <div className="artifact-list"><span>Evidence artifacts</span>{result.artifacts.map((artifact) => <a key={artifact.artifact_id} href={resolveBackendUrl(artifact.url)} target="_blank" rel="noreferrer"><FileJson /><span><strong>{artifact.name}</strong><small>{readable(artifact.kind)} · {formatNumber(artifact.size_bytes / 1024, 0)} KB</small></span></a>)}</div>}
         </section>

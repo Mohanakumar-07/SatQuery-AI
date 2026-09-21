@@ -41,14 +41,7 @@ export function SiteHeader({ mode = 'landing', backHref, backLabel }: SiteHeader
         <Link href="/workspace" className={cn(buttonVariants(), 'header-cta')}>
           Open workspace <ArrowUpRight aria-hidden="true" />
         </Link>
-      ) : (
-        <Link
-          href="/history"
-          className={cn(buttonVariants({ variant: 'outline' }), 'header-cta app-header-action')}
-        >
-          <History aria-hidden="true" /> History
-        </Link>
-      )}
+      ) : null}
     </header>
   );
 }

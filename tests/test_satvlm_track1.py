@@ -672,3 +672,68 @@ def test_22_warn_token_budget_headroom():
     assert response.endswith(".") or response.endswith("]")
 
 
+def test_23_desert_scene_hallucination_regression():
+    """Test 23: Dubai circular desert scene regression fixture.
+
+    Enforces behavioral invariants (Section 8 & Correction 2):
+      - Rejects affirmative water/vegetation claims when evidence or arid context does not support them
+      - Correctly preserved negated ('no visible water bodies') and hedged statements
+      - Flags micro-feature subpixel claims ('road signs', 'traffic markings')
+      - Downward confidence adjustment (ACCEPT -> WARN) occurs when claims are sanitized
+      - Trace preserves raw output and records flagged reasons
+    """
+    from src.evidence_engine.claim_validator import validate_claims
+
+    # Case A: Hallucinated response (similar to old v1 output)
+    hallucinated_text = (
+        "The satellite image shows an urban landscape with a central roundabout. "
+        "The streets are clearly marked with road signs and markings. "
+        "To the left, a large body of water, possibly a lake or river, is visible, "
+        "surrounded by lush greenery and vegetation."
+    )
+
+    bundle_arid_no_water = [
+        {
+            "evidence_type": "LandCoverFacts",
+            "source_model": "SAR-FuseSeg-V3",
+            "facts": {"water_percentage": 0.0, "vegetation_percentage": 0.0, "built_up_percentage": 78.0},
+        }
+    ]
+
+    val_res = validate_claims(hallucinated_text, evidence_bundle=bundle_arid_no_water)
+
+    # 1. Assert unsupported claims are detected and counted
+    assert val_res.unsupported_claims >= 2  # micro_features + water + vegetation
+    flagged_types = [f.claim_type for f in val_res.flagged_claims]
+    assert "micro_feature" in flagged_types
+    assert "water" in flagged_types
+    assert "vegetation" in flagged_types
+
+    # 2. Assert status is downgraded to WARN
+    assert val_res.status == "DOWNGRADED_WARN"
+    assert any("claim_validation_downgraded_to_warn" in t for t in val_res.trace)
+
+    # 3. Assert sanitized output removes hallucinated claims
+    assert "road signs and markings" not in val_res.sanitized_text
+    assert "lake or river" not in val_res.sanitized_text
+
+    # Case B: Grounded response with valid negation and hedging (satvlm-prompted-v2 behavior)
+    grounded_text = (
+        "The satellite scene shows an urban development with a central circular layout. "
+        "Streets radiate outwards from the center. "
+        "There are no visible water bodies, indicating that the area is likely dry or arid. "
+        "I cannot confirm whether vegetation is present from this image."
+    )
+
+    val_res_grounded = validate_claims(grounded_text, evidence_bundle=bundle_arid_no_water)
+
+    # 4. Assert correctly negated or hedged claims are NOT flagged as positive claims
+    assert val_res_grounded.unsupported_claims == 0
+    assert val_res_grounded.status == "VERIFIED"
+    assert "no visible water bodies" in val_res_grounded.sanitized_text
+    assert "cannot confirm whether vegetation is present" in val_res_grounded.sanitized_text
+    assert "negated_claim_preserved" in val_res_grounded.trace
+    assert "hedged_claim_preserved" in val_res_grounded.trace
+
+
+

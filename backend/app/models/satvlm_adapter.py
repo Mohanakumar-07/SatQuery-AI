@@ -13,19 +13,74 @@ Hard limits:
 from __future__ import annotations
 
 import glob
+import hashlib
 import logging
 import os
 import threading
 from pathlib import Path
 from typing import Any, Optional
 
+import numpy as np
+from PIL import Image
 import torch
 
 from app.models.base import AdapterProbe, AdapterRequest, AdapterResponse, BaseSpecialistAdapter
 from app.schemas.common import Warning, WarningLevel
-from app.services.satvlm_prompt import SYSTEM_PROMPT
+from app.services.satvlm_prompt import (
+    SYSTEM_PROMPT,
+    SYSTEM_PROMPT_V2,
+    get_system_prompt,
+    TARGET_IDENTIFIER_V2,
+    PROMPT_VERSION_V2,
+)
 
 logger = logging.getLogger("satquery.models.satvlm_adapter")
+
+
+def inspect_and_prepare_image(image_path: Path, work_dir: Optional[Path] = None) -> tuple[Path, dict[str, Any]]:
+    """Inspects source image, logs metadata, ensures RGB, and saves preprocessed debug copy."""
+    resolved_path = image_path.resolve()
+    raw_bytes = resolved_path.read_bytes()
+    sha256 = hashlib.sha256(raw_bytes).hexdigest()
+
+    with Image.open(resolved_path) as im:
+        orig_size = im.size
+        orig_mode = im.mode
+        if im.mode != "RGB":
+            im_rgb = im.convert("RGB")
+        else:
+            im_rgb = im.copy()
+
+        arr = np.array(im_rgb)
+        meta = {
+            "source_path": str(resolved_path),
+            "sha256": sha256,
+            "file_size_bytes": len(raw_bytes),
+            "original_size": orig_size,
+            "original_mode": orig_mode,
+            "channels": arr.shape[2] if arr.ndim == 3 else 1,
+            "dtype": str(arr.dtype),
+            "min_val": int(arr.min()),
+            "max_val": int(arr.max()),
+            "mean_val": float(arr.mean()),
+            "preprocessing_version": "satvlm-preprocess-v1",
+        }
+
+        logger.info(
+            "SatVLM image inspected: path=%s, size=%s, mode=%s, channels=%s, dtype=%s, range=[%s, %s], mean=%.2f, sha256=%s",
+            resolved_path.name, orig_size, orig_mode, meta["channels"], meta["dtype"],
+            meta["min_val"], meta["max_val"], meta["mean_val"], sha256[:16]
+        )
+
+        out_path = resolved_path
+        if work_dir:
+            work_dir.mkdir(parents=True, exist_ok=True)
+            debug_path = work_dir / f"satvlm_input_preprocessed_{sha256[:8]}.png"
+            im_rgb.save(debug_path)
+            meta["preprocessed_path"] = str(debug_path)
+            out_path = debug_path
+
+        return out_path, meta
 
 # ─── Module-Level Singleton Runtime State ─────────────────────────────────────
 _MODEL: Any = None
@@ -85,7 +140,8 @@ def resolve_model_path() -> Optional[Path]:
 class SatVLMAdapter(BaseSpecialistAdapter):
     internal_name = "SatVLM"
     model_name = "Qwen2.5-VL-3B-Instruct"
-    version = "satvlm-prompted-v1-qwen3b-4bit"
+    version = "satvlm-prompted-v2-qwen3b-4bit"
+    prompt_version = "v2.0.0"
     preprocessing_version = "satvlm-preprocess-v1"
     requires_gpu = True
     checkpoint_hint = "satvlm"
@@ -260,21 +316,40 @@ class SatVLMAdapter(BaseSpecialistAdapter):
                 evidence_hint = "\n\nVerified specialist measurements:\n" + "\n".join(fact_lines) + "\nIncorporate these measurements directly."
 
         # Build grounded conversation messages
+        sys_prompt = request.params.get("system_prompt") or SYSTEM_PROMPT_V2
         messages: list[dict[str, Any]] = [
-            {"role": "system", "content": SYSTEM_PROMPT}
+            {"role": "system", "content": sys_prompt}
         ]
 
+        chat_history = request.params.get("chat_history") or []
+        if chat_history:
+            trace.append(f"satvlm_chat_history_turns_{len(chat_history)}")
+            for turn in chat_history:
+                t_role = turn.get("role", "user")
+                t_content = turn.get("content", "")
+                if t_content:
+                    messages.append({"role": t_role, "content": str(t_content)})
+
         user_content: list[dict[str, Any]] = []
+        work_dir = getattr(request, "work_dir", None)
+        trace = ["satvlm_adapter_invoked"]
 
         if before_src and after_src and Path(before_src.path).is_file() and Path(after_src.path).is_file():
+            b_path, b_meta = inspect_and_prepare_image(Path(before_src.path), work_dir)
+            a_path, a_meta = inspect_and_prepare_image(Path(after_src.path), work_dir)
+            trace.append(f"satvlm_before_sha_{b_meta['sha256'][:10]}")
+            trace.append(f"satvlm_after_sha_{a_meta['sha256'][:10]}")
             user_content.append({"type": "text", "text": f"Question: {request.question}\n\nBefore image:"})
-            user_content.append({"type": "image", "image": str(Path(before_src.path).resolve())})
+            user_content.append({"type": "image", "image": str(b_path)})
             user_content.append({"type": "text", "text": "After image:"})
-            user_content.append({"type": "image", "image": str(Path(after_src.path).resolve())})
+            user_content.append({"type": "image", "image": str(a_path)})
             if evidence_hint:
                 user_content.append({"type": "text", "text": evidence_hint})
         elif primary_src and primary_src.path and Path(primary_src.path).is_file():
-            user_content.append({"type": "image", "image": str(Path(primary_src.path).resolve())})
+            p_path, p_meta = inspect_and_prepare_image(Path(primary_src.path), work_dir)
+            trace.append(f"satvlm_image_sha_{p_meta['sha256'][:10]}")
+            trace.append(f"satvlm_input_dim_{p_meta['original_size'][0]}x{p_meta['original_size'][1]}")
+            user_content.append({"type": "image", "image": str(p_path)})
             prompt_text = f"Question: {request.question}"
             if evidence_hint:
                 prompt_text += f"\n{evidence_hint}"
@@ -292,6 +367,10 @@ class SatVLMAdapter(BaseSpecialistAdapter):
                 messages, tokenize=False, add_generation_prompt=True
             )
             image_inputs, video_inputs = process_vision_info(messages)
+            if image_inputs:
+                actual_dims = [img.size for img in image_inputs]
+                logger.info("Qwen processor vision input actual dimensions: %s", actual_dims)
+                trace.append(f"qwen_actual_dim_{actual_dims[0][0]}x{actual_dims[0][1]}")
             inputs = _PROCESSOR(
                 text=[text_prompt],
                 images=image_inputs,
@@ -338,13 +417,30 @@ class SatVLMAdapter(BaseSpecialistAdapter):
                 warnings=[Warning(code="INFERENCE_FAILED", level=WarningLevel.ERROR, message=str(exc))],
             )
 
+        trace.append("satvlm_preprocess_v1_verified")
+        trace.append("satvlm_qwen3b_inferred")
+
+        # Deterministic claim validation (claim-validator-v1)
+        from src.evidence_engine.claim_validator import validate_claims
+        ev_bundle = request.params.get("evidence_bundle") or []
+        val_res = validate_claims(output_text, evidence_bundle=ev_bundle, task=request.task)
+        trace.extend(val_res.trace)
+
+        final_answer = val_res.sanitized_text if val_res.unsupported_claims > 0 else output_text
+        answer_status = "answered" if val_res.status != "ABSTAINED" else "abstained"
+
         return AdapterResponse(
             source="SatVLM",
             version=self.version,
-            answer=output_text,
-            answer_status="answered",
+            answer=final_answer,
+            answer_status=answer_status,
             evidence_coverage=0.85,
-            unsupported_claims=0,
-            trace=["satvlm_qwen3b_inferred"],
+            unsupported_claims=val_res.unsupported_claims,
+            trace=trace,
+            detail={
+                "raw_answer": output_text,
+                "sanitized_answer": val_res.sanitized_text,
+                "flagged_claims": [f.to_dict() for f in val_res.flagged_claims],
+            },
         )
 

@@ -30,6 +30,10 @@ var/
 *.sqlite
 *.sqlite3
 backend/app.db
+langgraph_checkpoints.db*
+*.checkpoint
+.langchain*
+.langgraph*
 *.log
 logs/
 
