@@ -150,10 +150,21 @@ class SatVLMAdapter(BaseSpecialistAdapter):
         """Cheap, non-loading availability check.
 
         Distinguishes:
+          - Remote tunnel URL configured -> available / ADAPTER_READY
           - CUDA unavailable -> unavailable / CUDA_REQUIRED
           - CUDA available but model absent -> unavailable / MODEL_NOT_FOUND
           - CUDA + model present -> available / ADAPTER_READY
         """
+        remote_url = os.environ.get("SATQUERY_SATVLM_REMOTE_URL")
+        if remote_url:
+            return AdapterProbe(
+                available=True,
+                status="available",
+                code="ADAPTER_READY",
+                reason=f"Remote SatVLM gateway active at {remote_url}.",
+                detail={"remote_url": remote_url},
+            )
+
         if not torch.cuda.is_available():
             return AdapterProbe(
                 available=False,
@@ -280,6 +291,10 @@ class SatVLMAdapter(BaseSpecialistAdapter):
                 unsupported_claims=0,
                 trace=["satvlm_synthetic_test_evaluated"],
             )
+
+        remote_url = os.environ.get("SATQUERY_SATVLM_REMOTE_URL")
+        if remote_url:
+            return self._infer_remote(remote_url, request)
 
         probe = self.available()
         if not probe.available:
@@ -437,10 +452,120 @@ class SatVLMAdapter(BaseSpecialistAdapter):
             evidence_coverage=0.85,
             unsupported_claims=val_res.unsupported_claims,
             trace=trace,
-            detail={
+            facts={
                 "raw_answer": output_text,
                 "sanitized_answer": val_res.sanitized_text,
                 "flagged_claims": [f.to_dict() for f in val_res.flagged_claims],
             },
         )
+
+    def _infer_remote(self, remote_url: str, request: AdapterRequest) -> AdapterResponse:
+        """Dispatches VLM reasoning to an external GPU gateway (e.g. laptop via Cloudflare tunnel)."""
+        import base64
+        import httpx
+        from src.evidence_engine.claim_validator import validate_claims
+
+        clean_url = remote_url.rstrip("/")
+        endpoint = f"{clean_url}/infer"
+        bundle = request.bundle
+        sources = getattr(bundle, "sources", []) or []
+
+        before_src = bundle.source_for("before") if hasattr(bundle, "source_for") else None
+        after_src = bundle.source_for("after") if hasattr(bundle, "source_for") else None
+
+        images_payload = []
+        if before_src and after_src and Path(before_src.path).is_file() and Path(after_src.path).is_file():
+            b_bytes = Path(before_src.path).read_bytes()
+            a_bytes = Path(after_src.path).read_bytes()
+            images_payload.append({
+                "label": "before",
+                "base64": base64.b64encode(b_bytes).decode("utf-8"),
+                "mime_type": "image/png" if str(before_src.path).lower().endswith(".png") else "image/jpeg",
+            })
+            images_payload.append({
+                "label": "after",
+                "base64": base64.b64encode(a_bytes).decode("utf-8"),
+                "mime_type": "image/png" if str(after_src.path).lower().endswith(".png") else "image/jpeg",
+            })
+        else:
+            primary_src = before_src or (sources[0] if sources else None)
+            if primary_src and primary_src.path and Path(primary_src.path).is_file():
+                p_bytes = Path(primary_src.path).read_bytes()
+                images_payload.append({
+                    "label": "primary",
+                    "base64": base64.b64encode(p_bytes).decode("utf-8"),
+                    "mime_type": "image/png" if str(primary_src.path).lower().endswith(".png") else "image/jpeg",
+                })
+
+        evidence_hint = request.params.get("evidence_hint", "")
+        facts = request.params.get("facts") or {}
+        if facts and not evidence_hint:
+            fact_lines = [f"- {k}: {v}" for k, v in facts.items() if v is not None]
+            if fact_lines:
+                evidence_hint = "\n\nVerified specialist measurements:\n" + "\n".join(fact_lines) + "\nIncorporate these measurements directly."
+
+        payload = {
+            "analysis_id": request.analysis_id,
+            "question": request.question,
+            "system_prompt": request.params.get("system_prompt") or SYSTEM_PROMPT_V2,
+            "evidence_hint": evidence_hint,
+            "chat_history": request.params.get("chat_history") or [],
+            "images": images_payload,
+            "task": request.task,
+        }
+
+        trace = ["satvlm_adapter_remote_gateway_invoked", f"satvlm_remote_endpoint_{clean_url}"]
+
+        try:
+            logger.info("Dispatching SatVLM inference to remote gateway: %s", endpoint)
+            with httpx.Client(timeout=120.0) as client:
+                resp = client.post(endpoint, json=payload)
+                resp.raise_for_status()
+                data = resp.json()
+        except Exception as exc:
+            logger.error("SatVLM remote gateway error (%s): %s", endpoint, exc)
+            return AdapterResponse(
+                source="SatVLM",
+                version=self.version,
+                answer=f"Remote SatVLM gateway connection failed: {exc}",
+                answer_status="abstained",
+                trace=["satvlm_remote_gateway_failed"],
+                warnings=[
+                    Warning(
+                        code="REMOTE_GATEWAY_ERROR",
+                        level=WarningLevel.ERROR,
+                        message=f"Could not reach remote SatVLM tunnel at {clean_url}: {exc}",
+                    )
+                ],
+            )
+
+        output_text = data.get("output_text") or data.get("answer") or ""
+        remote_trace = data.get("trace") or []
+        trace.extend(remote_trace)
+        trace.append("satvlm_remote_inferred")
+
+        # Deterministic claim validation on backend
+        ev_bundle = request.params.get("evidence_bundle") or []
+        val_res = validate_claims(output_text, evidence_bundle=ev_bundle, task=request.task)
+        trace.extend(val_res.trace)
+
+        final_answer = val_res.sanitized_text if val_res.unsupported_claims > 0 else output_text
+        answer_status = "answered" if val_res.status != "ABSTAINED" else "abstained"
+
+        return AdapterResponse(
+            source="SatVLM",
+            version=self.version,
+            answer=final_answer,
+            answer_status=answer_status,
+            evidence_coverage=0.85,
+            unsupported_claims=val_res.unsupported_claims,
+            trace=trace,
+            facts={
+                "raw_answer": output_text,
+                "sanitized_answer": val_res.sanitized_text,
+                "flagged_claims": [f.to_dict() for f in val_res.flagged_claims],
+                "remote_gateway": clean_url,
+            },
+        )
+
 

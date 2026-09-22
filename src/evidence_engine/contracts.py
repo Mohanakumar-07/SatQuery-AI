@@ -61,7 +61,9 @@ _RE_QUANTITATIVE = re.compile(
     re.IGNORECASE,
 )
 _RE_EXPLICIT_QUALITATIVE = re.compile(
-    r"\b(describe|overview|summary|what features|what is visible|visual appearance|look like|inspect scene|view|general scene|what colors?)\b",
+    r"\b(describe|overview|summary|what features|what is visible|visual appearance|look like|inspect scene|view|general scene|what colors?)\b"
+    r"|\bwhat\b.*\b(?:visible|seen|present|observable)\b"
+    r"|\b(?:is|are)\s+visible\b",
     re.IGNORECASE,
 )
 _RE_GEOSPATIAL = re.compile(

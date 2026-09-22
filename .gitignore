@@ -50,12 +50,14 @@ artifacts/geojson/**
 artifacts/reports/**
 artifacts/scenes/**
 artifacts/checkpoints/**
+artifacts/work/**
 !artifacts/uploads/.gitkeep
 !artifacts/masks/.gitkeep
 !artifacts/geojson/.gitkeep
 !artifacts/reports/.gitkeep
 !artifacts/scenes/.gitkeep
 !artifacts/checkpoints/.gitkeep
+
 
 # ---- Secrets, local environment & temporary working directories ----
 .env

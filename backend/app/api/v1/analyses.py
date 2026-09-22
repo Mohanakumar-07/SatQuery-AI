@@ -13,6 +13,7 @@ from app.db.models import Analysis
 from app.db.repo import (
     claim_graph_resume,
     create_analysis,
+    delete_analysis,
     get_uploads,
     list_analyses,
     list_events,
@@ -151,6 +152,13 @@ def history(
 def read(analysis_id: str, session: DbSession, settings: AppSettings) -> AnalysisDetailResponse:
     analysis = require_analysis(session, analysis_id)
     return _detail(analysis, settings)
+
+
+@router.delete("/{analysis_id}", status_code=status.HTTP_200_OK, summary="Delete an analysis")
+def delete(analysis_id: str, session: DbSession) -> dict[str, bool]:
+    require_analysis(session, analysis_id)
+    deleted = delete_analysis(session, analysis_id)
+    return {"success": deleted}
 
 
 @router.get("/{analysis_id}/status", response_model=AnalysisStatusResponse, summary="Poll analysis progress")

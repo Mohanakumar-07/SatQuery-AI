@@ -31,3 +31,7 @@ orjson>=3.9
 langgraph>=0.2.0
 langchain-core>=0.3.0
 langgraph-checkpoint-sqlite>=2.0.0
+
+# HTTP client for remote vision gateway tunnel
+httpx>=0.25.0
+

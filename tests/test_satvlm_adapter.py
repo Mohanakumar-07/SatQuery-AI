@@ -129,3 +129,63 @@ def test_abstain_bypasses_qwen_generation():
 
     from app.services.satvlm_prompt import TEMPLATE_INVALID_CONTRACT
     assert answer == TEMPLATE_INVALID_CONTRACT
+
+
+def test_remote_gateway_probe(monkeypatch):
+    """Verifies that when SATQUERY_SATVLM_REMOTE_URL is set, adapter is ready even without CUDA."""
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    monkeypatch.setenv("SATQUERY_SATVLM_REMOTE_URL", "https://mock-tunnel.trycloudflare.com")
+    adapter = SatVLMAdapter()
+    probe = adapter.available()
+    assert probe.available is True
+    assert probe.status == "available"
+    assert probe.code == "ADAPTER_READY"
+    assert "https://mock-tunnel.trycloudflare.com" in probe.reason
+
+
+def test_remote_gateway_infer(monkeypatch, tmp_path):
+    """Verifies that when SATQUERY_SATVLM_REMOTE_URL is set, infer posts payload and validates claims."""
+    import httpx
+
+    test_img = tmp_path / "test_scene.png"
+    test_img.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 50)  # minimal png bytes
+
+    mock_source = MagicMock()
+    mock_source.path = str(test_img)
+    mock_source.role = "primary"
+
+    mock_bundle = MagicMock()
+    mock_bundle.sources = [mock_source]
+    mock_bundle.source_for.return_value = mock_source
+
+    request = AdapterRequest(
+        analysis_id="test_remote_1",
+        task="single_scene_vqa",
+        question="What is visible here?",
+        bundle=mock_bundle,
+        work_dir=tmp_path,
+        params={},
+    )
+
+    monkeypatch.setenv("SATQUERY_SATVLM_REMOTE_URL", "https://mock-tunnel.trycloudflare.com")
+
+    # Mock httpx.Client post response
+    class MockResponse:
+        status_code = 200
+        def raise_for_status(self):
+            pass
+        def json(self):
+            return {
+                "status": "success",
+                "output_text": "A clear coastal inlet is visible.",
+                "trace": ["satvlm_remote_qwen_ok"],
+            }
+
+    with patch.object(httpx.Client, "post", return_value=MockResponse()):
+        adapter = SatVLMAdapter()
+        res = adapter.infer(request)
+        assert res.answer_status == "answered"
+        assert res.answer == "A clear coastal inlet is visible."
+        assert "satvlm_adapter_remote_gateway_invoked" in res.trace
+        assert "satvlm_remote_inferred" in res.trace
+

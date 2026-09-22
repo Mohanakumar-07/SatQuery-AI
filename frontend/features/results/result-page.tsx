@@ -24,10 +24,8 @@ const formatArea = (result: AnalysisResult) => {
 function ResultState({ analysisId, title, message, error = false }: { analysisId: string; title: string; message: string; error?: boolean }) {
   return (
     <main className="app-shell result-shell">
-      <SiteHeader mode="app" backHref="/history" backLabel="Analysis history" />
       <SiteHeader mode="app" backHref="/workspace" backLabel="Back to Chat" />
       <div className="result-heading"><div><span className="section-kicker">Analysis / {analysisId}</span><h1>{title}</h1></div></div>
-      <section className={`result-state-panel ${error ? 'is-error' : ''}`}>{error ? <AlertTriangle /> : <LoaderCircle className="spin-slow" />}<strong>{title}</strong><p>{message}</p><Link href="/history">Back to analysis history</Link></section>
       <section className={`result-state-panel ${error ? 'is-error' : ''}`}>{error ? <AlertTriangle /> : <LoaderCircle className="spin-slow" />}<strong>{title}</strong><p>{message}</p><Link href="/workspace">Back to Chat</Link></section>
     </main>
   );
@@ -87,7 +85,6 @@ export function ResultPage({ analysisId }: { analysisId: string }) {
   if (error) return <ResultState analysisId={analysisId} title="Backend unavailable." message={error} error />;
   if (status?.status === 'failed') return <ResultState analysisId={analysisId} title="Analysis failed." message={status.error?.message ?? status.message ?? 'The backend stopped this analysis safely.'} error />;
   if (status?.status === 'needs_clarification' && status.clarification) {
-    return <main className="app-shell result-shell"><SiteHeader mode="app" backHref="/history" backLabel="Analysis history" /><div className="result-heading"><div><span className="section-kicker">Analysis / {analysisId}</span><h1>Input clarification.</h1></div></div><ClarificationPanel clarification={status.clarification} onResume={async (payload) => { await satqueryApi.submitClarification(analysisId, payload); refresh(); }} /></main>;
     return <main className="app-shell result-shell"><SiteHeader mode="app" backHref="/workspace" backLabel="Back to Chat" /><div className="result-heading"><div><span className="section-kicker">Analysis / {analysisId}</span><h1>Input clarification.</h1></div></div><ClarificationPanel clarification={status.clarification} onResume={async (payload) => { await satqueryApi.submitClarification(analysisId, payload); refresh(); }} /></main>;
   }
   if (!result) return <ResultState analysisId={analysisId} title={readable(status?.stage ?? 'Loading analysis')} message={status?.message ?? 'Reading analysis status from the local backend.'} />;

@@ -22,6 +22,7 @@ import {
   Radar,
   Settings,
   ShieldCheck,
+  Trash2,
   User,
   X,
 } from 'lucide-react';
@@ -169,6 +170,8 @@ export function WorkspacePage() {
   const [showSettings, setShowSettings] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [activeItemId, setActiveItemId] = useState<string>('');
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const dragCounter = useRef(0);
 
   const { status: analysisStatus, result: analysisResult, refresh } = useAnalysis(analysisId);
 
@@ -197,6 +200,19 @@ export function WorkspacePage() {
         setHistoryLoading(false);
       });
   };
+
+  useEffect(() => {
+    const handleWindowClick = () => setMenuOpenId(null);
+    const handleKeyDown = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuOpenId(null);
+    };
+    window.addEventListener('click', handleWindowClick);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('click', handleWindowClick);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
 
   useEffect(() => {
     satqueryApi
@@ -302,10 +318,52 @@ export function WorkspacePage() {
     event.target.value = '';
   };
 
+  const handleDragEnter = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    dragCounter.current += 1;
+    if (event.dataTransfer?.items && event.dataTransfer.items.length > 0) {
+      setDragging(true);
+    }
+  };
+
+  const handleDragLeave = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    dragCounter.current -= 1;
+    if (dragCounter.current <= 0) {
+      dragCounter.current = 0;
+      setDragging(false);
+    }
+  };
+
+  const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
+    event.stopPropagation();
+    dragCounter.current = 0;
     setDragging(false);
-    if (event.dataTransfer.files) addFiles(event.dataTransfer.files);
+    if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
+      addFiles(event.dataTransfer.files);
+    }
+  };
+
+  const handleDeleteChat = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    setMenuOpenId(null);
+    setHistoryItems((prev) => prev.filter((item) => item.id !== id));
+    if (activeItemId === id || analysisId === id) {
+      resetConversation();
+    }
+    try {
+      await satqueryApi.deleteAnalysis(id);
+    } catch (err) {
+      console.warn('Could not delete analysis from database:', err);
+    }
   };
 
   // Sidebar history click: load previous mission into conversation view (keeps user on Chat page!)
@@ -460,10 +518,18 @@ export function WorkspacePage() {
       <div>
         <div className="chat-history-group-title">{label}</div>
         {items.map((item) => (
-          <button
+          <div
             key={item.id}
             className={`chat-history-row ${activeItemId === item.id ? 'is-active' : ''}`}
             onClick={() => handleHistoryClick(item)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                void handleHistoryClick(item);
+              }
+            }}
           >
             <div className="chat-history-row-content">
               <MessageSquare />
@@ -472,8 +538,42 @@ export function WorkspacePage() {
                 <span className="chat-history-row-time">{item.timeAgo}</span>
               </div>
             </div>
-            <span className="chat-history-row-more"><MoreVertical /></span>
-          </button>
+            <button
+              type="button"
+              className={`chat-history-row-more ${menuOpenId === item.id ? 'is-open' : ''}`}
+              aria-label="Chat options"
+              onClick={(e) => {
+                e.stopPropagation();
+                setMenuOpenId((cur) => (cur === item.id ? null : item.id));
+              }}
+            >
+              <MoreVertical />
+            </button>
+            {menuOpenId === item.id && (
+              <div className="chat-history-dropdown" onClick={(e) => e.stopPropagation()}>
+                <button
+                  type="button"
+                  className="chat-history-dropdown-item"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setMenuOpenId(null);
+                    router.push(`/analysis/${item.id}`);
+                  }}
+                >
+                  <Radar />
+                  <span>View Analysis</span>
+                </button>
+                <button
+                  type="button"
+                  className="chat-history-dropdown-item is-danger"
+                  onClick={(e) => void handleDeleteChat(e, item.id)}
+                >
+                  <Trash2 />
+                  <span>Delete Chat</span>
+                </button>
+              </div>
+            )}
+          </div>
         ))}
       </div>
     ) : null;
@@ -526,7 +626,7 @@ export function WorkspacePage() {
             <Plus /><span>New Chat</span>
           </button>
 
-          <div className="chat-sidebar-history">
+          <div className="chat-sidebar-history" data-lenis-prevent="true">
             {historyLoading ? (
               <div className="px-3 py-4 text-xs text-[#626b70] flex items-center gap-2">
                 <LoaderCircle className="h-3.5 w-3.5 animate-spin text-[var(--solar-foil)]" />
@@ -550,13 +650,28 @@ export function WorkspacePage() {
           </button>
         </aside>
 
-        <main className="chat-main-canvas">
+        <main
+          className="chat-main-canvas"
+          data-lenis-prevent="true"
+          onDragEnter={handleDragEnter}
+          onDragLeave={handleDragLeave}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+        >
+          {dragging && (
+            <div className="chat-canvas-dropzone">
+              <FileImage />
+              <strong>Drop satellite imagery here</strong>
+              <p>Supports GeoTIFF, TIFF, PNG, and JPEG formats (up to 2 files)</p>
+            </div>
+          )}
+
           <div className="chat-canvas-header">
             <Link href="/history"><History aria-hidden="true" />History</Link>
             <button onClick={resetConversation}><Plus aria-hidden="true" />New chat</button>
           </div>
 
-          <div className="chat-thread" aria-label="Satellite analysis conversation">
+          <div className="chat-thread" data-lenis-prevent="true" aria-label="Satellite analysis conversation">
             {!conversationStarted ? (
               <div className="chat-empty-hero">
                 <h1 className="chat-hero-title">Ask. <span className="accent">Analyze.</span> Discover.</h1>
@@ -622,7 +737,7 @@ export function WorkspacePage() {
                               {msg.analysisId && (
                                 <Link
                                   href={`/analysis/${msg.analysisId}`}
-                                  className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--starlight)] px-4 py-2 text-xs font-semibold text-[var(--void)] hover:opacity-90 transition-opacity shadow-sm"
+                                  className="chat-view-analysis-btn"
                                 >
                                   <Radar className="h-3.5 w-3.5" /> View Analysis <ChevronRight className="h-3.5 w-3.5" />
                                 </Link>

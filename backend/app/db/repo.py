@@ -104,6 +104,16 @@ def list_analyses(
     return list(rows), int(total)
 
 
+def delete_analysis(session: Session, analysis_id: str) -> bool:
+    """Delete an analysis and its cascade links, events, and artifacts."""
+    analysis = session.get(Analysis, analysis_id)
+    if not analysis:
+        return False
+    session.delete(analysis)
+    session.commit()
+    return True
+
+
 def set_roles(session: Session, analysis: Analysis, roles: dict[str, str]) -> None:
     """Persist resolved file roles onto the analysis links."""
     for link in analysis.upload_links:

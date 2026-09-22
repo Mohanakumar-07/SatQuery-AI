@@ -351,6 +351,9 @@ export const satqueryApi = {
     `/analyses/${encodeURIComponent(analysisId)}/clarification`,
     { method: 'POST', body: JSON.stringify(payload) },
   ),
+  deleteAnalysis: (analysisId: string) => request<{ success: boolean }>(`/analyses/${encodeURIComponent(analysisId)}`, {
+    method: 'DELETE',
+  }),
   reportUrl: (analysisId: string, format: 'html' | 'json' | 'pdf' = 'json', download = true) =>
     `${SATQUERY_API_URL}/analyses/${encodeURIComponent(analysisId)}/report?format=${format}&download=${download}`,
 };
