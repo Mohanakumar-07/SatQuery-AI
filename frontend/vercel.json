@@ -3,6 +3,13 @@
   "cleanUrls": true,
   "trailingSlash": false,
   "buildCommand": "npm run build",
-  "outputDirectory": "dist/client"
+  "outputDirectory": "dist/client",
+  "rewrites": [
+    { "source": "/workspace", "destination": "/workspace.html" },
+    { "source": "/history", "destination": "/history.html" },
+    { "source": "/evidence", "destination": "/evidence.html" },
+    { "source": "/process", "destination": "/process.html" },
+    { "source": "/capabilities", "destination": "/capabilities.html" }
+  ]
 }
 
