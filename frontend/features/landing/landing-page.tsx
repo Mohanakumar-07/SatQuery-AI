@@ -1,4 +1,4 @@
-﻿import Link from 'next/link';
+import Link from 'next/link';
 import {
   ArrowDown,
   ArrowUpRight,
@@ -73,9 +73,9 @@ export function LandingPage() {
           <div className="cinematic-rule" aria-hidden="true"><i /><span /></div>
           <p>Evidence-backed satellite image analysis.</p>
           <div className="cinematic-actions">
-            <Link href="/workspace" className={cn(buttonVariants({ size: 'lg' }), 'cinematic-primary')}>
+            <a href="/workspace" className={cn(buttonVariants({ size: 'lg' }), 'cinematic-primary')}>
               Start an analysis <ArrowUpRight aria-hidden="true" />
-            </Link>
+            </a>
             <a href="#capabilities" className="cinematic-secondary">
               Explore capabilities <ArrowDown aria-hidden="true" />
             </a>

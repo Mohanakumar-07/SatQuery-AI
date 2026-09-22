@@ -89,6 +89,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             allow_headers=["*"],
             expose_headers=["Content-Disposition", "ETag", "X-Request-ID", "X-Process-Time-Ms"],
         )
+    cors_origins = list(settings.cors_origins) if settings.cors_origins else ["*"]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"] if ("*" in cors_origins or not cors_origins) else cors_origins,
+        allow_origin_regex=None if ("*" in cors_origins or not cors_origins) else r"^https?://.*$",
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+        expose_headers=["Content-Disposition", "ETag", "X-Request-ID", "X-Process-Time-Ms"],
+    )
 
     @app.middleware("http")
     async def request_context(request: Request, call_next):
@@ -165,6 +175,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
 
     @app.get("/", response_model=RootResponse, include_in_schema=False)
+    @app.get("/api/v1", response_model=RootResponse, include_in_schema=False)
+    @app.get("/api/v1/", response_model=RootResponse, include_in_schema=False)
     def root() -> RootResponse:
         return RootResponse(
             name=settings.app_name,

@@ -1,6 +1,15 @@
 export const SATQUERY_API_URL = (
   process.env.NEXT_PUBLIC_SATQUERY_API_URL ?? 'http://localhost:8000/api/v1'
 ).replace(/\/$/, '');
+const rawApiUrl = (
+  process.env.NEXT_PUBLIC_SATQUERY_API_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  'http://localhost:8000/api/v1'
+).trim().replace(/\/+$/, '');
+
+export const SATQUERY_API_URL = rawApiUrl.endsWith('/api/v1')
+  ? rawApiUrl
+  : `${rawApiUrl}/api/v1`;
 
 export type AnalysisStatus = 'queued' | 'running' | 'needs_clarification' | 'completed' | 'failed';
 export type AnalysisStage =
