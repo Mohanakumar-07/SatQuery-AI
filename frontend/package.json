@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "vinext dev",
-    "build": "vinext build",
+    "build": "vinext build --prerender-all && node -e \"const fs = require('fs'); const src = 'dist/server/prerendered-routes'; const dest = 'dist/client'; if (fs.existsSync(src)) fs.cpSync(src, dest, { recursive: true });\"",
     "start": "vinext start",
     "lint": "oxlint",
     "format": "oxfmt"
