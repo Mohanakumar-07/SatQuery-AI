@@ -340,9 +340,9 @@ export const satqueryApi = {
     method: 'POST',
     body: JSON.stringify({ upload_ids: uploadIds, question }),
   }),
-  createAnalysis: (uploadIds: string[], question: string) => request<AnalysisCreated>('/analyses', {
+  createAnalysis: (uploadIds: string[], question: string, threadId?: string) => request<AnalysisCreated>('/analyses', {
     method: 'POST',
-    body: JSON.stringify({ upload_ids: uploadIds, question }),
+    body: JSON.stringify({ upload_ids: uploadIds, question, thread_id: threadId }),
   }),
   listAnalyses: (limit = 100, offset = 0) => request<AnalysisListResponse>(`/analyses?limit=${limit}&offset=${offset}`),
   analysisStatus: (analysisId: string) => request<AnalysisStatusResponse>(`/analyses/${encodeURIComponent(analysisId)}/status`),
@@ -351,6 +351,9 @@ export const satqueryApi = {
     `/analyses/${encodeURIComponent(analysisId)}/clarification`,
     { method: 'POST', body: JSON.stringify(payload) },
   ),
+  deleteAnalysis: (analysisId: string) => request<{ success: boolean }>(`/analyses/${encodeURIComponent(analysisId)}`, {
+    method: 'DELETE',
+  }),
   reportUrl: (analysisId: string, format: 'html' | 'json' | 'pdf' = 'json', download = true) =>
     `${SATQUERY_API_URL}/analyses/${encodeURIComponent(analysisId)}/report?format=${format}&download=${download}`,
 };

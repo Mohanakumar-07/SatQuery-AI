@@ -88,8 +88,17 @@ def source_from_upload(
     )
 
 
+def _flatten_bounds(b):
+    if b and len(b) == 2 and isinstance(b[0], (tuple, list)):
+        return (b[0][0], b[0][1], b[1][0], b[1][1])
+    return b
+
+
 def _intersection(bounds_a, bounds_b):
-    a, b = bounds_a, bounds_b
+    if bounds_a is None or bounds_b is None:
+        return None
+    a = _flatten_bounds(bounds_a)
+    b = _flatten_bounds(bounds_b)
     if a is None or b is None:
         return None
     south = max(a[0], b[0])
@@ -215,7 +224,9 @@ def build_scene_bundle(
             upload,
             role=roles.get(upload.id, "unknown"),
             modality=modalities.get(upload.id),
-            stored_path=store.from_relative(upload.relative_path) if store is not None else None,
+            stored_path=store.from_relative(upload.relative_path) if store is not None else (
+                Path(upload.stored_name) if Path(upload.stored_name).is_file() else None
+            ),
         )
         for upload in uploads
     ]

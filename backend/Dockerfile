@@ -1,12 +1,10 @@
-# SatQuery AI — API image (web layer only, no model weights, no CUDA).
-# The GPU worker image is the same code with a different command; see
-# docker-compose.yml and requirements-ml.txt for the model-bearing variant.
+# SatQuery AI — API image (web layer, async engine, and remote VLM gateway)
 FROM python:3.11-slim
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
-    PYTHONPATH=/app:/app/backend
+    PYTHONPATH=/app:/app/backend:/app/src
 
 WORKDIR /app
 
@@ -16,10 +14,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY backend/requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+COPY backend/requirements-geospatial.txt ./requirements-geospatial.txt
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir rasterio shapely pyproj httpx
 
-# Preserve the repository's backend/ layout so repo-relative registry and policy
-# paths resolve identically in the API and worker containers.
+COPY src/ ./src/
 COPY backend/ ./backend/
 
 WORKDIR /app/backend
@@ -29,7 +28,4 @@ RUN mkdir -p /app/artifacts/uploads /app/artifacts/masks /app/artifacts/geojson 
 
 EXPOSE 8000
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -fsS http://localhost:8000/api/v1/health || exit 1
-
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

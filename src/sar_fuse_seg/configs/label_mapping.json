@@ -1,0 +1,257 @@
+{
+  "ignore_index": 255,
+  "ignored_official_codes": [
+    0,
+    141,
+    331,
+    332,
+    334,
+    335,
+    999
+  ],
+  "mapping_version": "sarfuseseg-clc-level3-to-three-class-v3",
+  "mappings": [
+    {
+      "official_code": 111,
+      "official_label": "Continuous urban fabric",
+      "target": 0,
+      "target_name": "built-up"
+    },
+    {
+      "official_code": 112,
+      "official_label": "Discontinuous urban fabric",
+      "target": 0,
+      "target_name": "built-up"
+    },
+    {
+      "official_code": 121,
+      "official_label": "Industrial or commercial units",
+      "target": 0,
+      "target_name": "built-up"
+    },
+    {
+      "official_code": 122,
+      "official_label": "Road and rail networks and associated land",
+      "target": 0,
+      "target_name": "built-up"
+    },
+    {
+      "official_code": 123,
+      "official_label": "Port areas",
+      "target": 0,
+      "target_name": "built-up"
+    },
+    {
+      "official_code": 124,
+      "official_label": "Airports",
+      "target": 0,
+      "target_name": "built-up"
+    },
+    {
+      "official_code": 131,
+      "official_label": "Mineral extraction sites",
+      "target": 0,
+      "target_name": "built-up"
+    },
+    {
+      "official_code": 132,
+      "official_label": "Dump sites",
+      "target": 0,
+      "target_name": "built-up"
+    },
+    {
+      "official_code": 133,
+      "official_label": "Construction sites",
+      "target": 0,
+      "target_name": "built-up"
+    },
+    {
+      "official_code": 142,
+      "official_label": "Sport and leisure facilities",
+      "target": 0,
+      "target_name": "built-up"
+    },
+    {
+      "official_code": 211,
+      "official_label": "Non-irrigated arable land",
+      "target": 2,
+      "target_name": "vegetation"
+    },
+    {
+      "official_code": 212,
+      "official_label": "Permanently irrigated land",
+      "target": 2,
+      "target_name": "vegetation"
+    },
+    {
+      "official_code": 213,
+      "official_label": "Rice fields",
+      "target": 2,
+      "target_name": "vegetation"
+    },
+    {
+      "official_code": 221,
+      "official_label": "Vineyards",
+      "target": 2,
+      "target_name": "vegetation"
+    },
+    {
+      "official_code": 222,
+      "official_label": "Fruit trees and berry plantations",
+      "target": 2,
+      "target_name": "vegetation"
+    },
+    {
+      "official_code": 223,
+      "official_label": "Olive groves",
+      "target": 2,
+      "target_name": "vegetation"
+    },
+    {
+      "official_code": 231,
+      "official_label": "Pastures",
+      "target": 2,
+      "target_name": "vegetation"
+    },
+    {
+      "official_code": 241,
+      "official_label": "Annual crops associated with permanent crops",
+      "target": 2,
+      "target_name": "vegetation"
+    },
+    {
+      "official_code": 242,
+      "official_label": "Complex cultivation patterns",
+      "target": 2,
+      "target_name": "vegetation"
+    },
+    {
+      "official_code": 243,
+      "official_label": "Land principally occupied by agriculture, with significant areas of natural vegetation",
+      "target": 2,
+      "target_name": "vegetation"
+    },
+    {
+      "official_code": 244,
+      "official_label": "Agro-forestry areas",
+      "target": 2,
+      "target_name": "vegetation"
+    },
+    {
+      "official_code": 311,
+      "official_label": "Broad-leaved forest",
+      "target": 2,
+      "target_name": "vegetation"
+    },
+    {
+      "official_code": 312,
+      "official_label": "Coniferous forest",
+      "target": 2,
+      "target_name": "vegetation"
+    },
+    {
+      "official_code": 313,
+      "official_label": "Mixed forest",
+      "target": 2,
+      "target_name": "vegetation"
+    },
+    {
+      "official_code": 321,
+      "official_label": "Natural grassland",
+      "target": 2,
+      "target_name": "vegetation"
+    },
+    {
+      "official_code": 322,
+      "official_label": "Moors and heathland",
+      "target": 2,
+      "target_name": "vegetation"
+    },
+    {
+      "official_code": 323,
+      "official_label": "Sclerophyllous vegetation",
+      "target": 2,
+      "target_name": "vegetation"
+    },
+    {
+      "official_code": 324,
+      "official_label": "Transitional woodland/shrub",
+      "target": 2,
+      "target_name": "vegetation"
+    },
+    {
+      "official_code": 333,
+      "official_label": "Sparsely vegetated areas",
+      "target": 2,
+      "target_name": "vegetation"
+    },
+    {
+      "official_code": 411,
+      "official_label": "Inland marshes",
+      "target": 1,
+      "target_name": "water"
+    },
+    {
+      "official_code": 412,
+      "official_label": "Peatbogs",
+      "target": 1,
+      "target_name": "water"
+    },
+    {
+      "official_code": 421,
+      "official_label": "Salt marshes",
+      "target": 1,
+      "target_name": "water"
+    },
+    {
+      "official_code": 422,
+      "official_label": "Salines",
+      "target": 1,
+      "target_name": "water"
+    },
+    {
+      "official_code": 423,
+      "official_label": "Intertidal flats",
+      "target": 1,
+      "target_name": "water"
+    },
+    {
+      "official_code": 511,
+      "official_label": "Water courses",
+      "target": 1,
+      "target_name": "water"
+    },
+    {
+      "official_code": 512,
+      "official_label": "Water bodies",
+      "target": 1,
+      "target_name": "water"
+    },
+    {
+      "official_code": 521,
+      "official_label": "Coastal lagoons",
+      "target": 1,
+      "target_name": "water"
+    },
+    {
+      "official_code": 522,
+      "official_label": "Estuaries",
+      "target": 1,
+      "target_name": "water"
+    },
+    {
+      "official_code": 523,
+      "official_label": "Sea and ocean",
+      "target": 1,
+      "target_name": "water"
+    }
+  ],
+  "official_source": "BigEarthNet v2.0 Description, Table 1: CLC Level-3 numeric reference-map class IDs",
+  "official_source_url": "https://bigearth.net/static/documents/Description_BigEarthNet_v2.pdf",
+  "policy": "This is an explicit SAR-FuseSeg aggregation of official CLC Level-3 codes; it is not the BigEarthNet 19-class nomenclature. Every code not listed in mappings maps to ignore_index. This includes 0 (nodata), 999 (Unlabeled), 141 (Green urban areas, excluded due to high spectral/SAR ambiguity with vegetation, consistent with BigEarthNet 19-class treatment), and 331/332/334/335 (beaches, bare rock, burnt areas, glaciers -- previously aggregated into a fourth 'other' class that held 0.02% of labelled pixels across too few, too heterogeneous surfaces to learn; run 1 scored it 0.0006 IoU. Dropping it removed a class the model could not have been made to predict, rather than reporting a headline mIoU dragged down by a class with no learnable signal.)",
+  "target_classes": {
+    "0": "built-up",
+    "1": "water",
+    "2": "vegetation"
+  }
+}

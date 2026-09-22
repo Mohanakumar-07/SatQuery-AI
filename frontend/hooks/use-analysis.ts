@@ -24,7 +24,7 @@ export function useAnalysis(analysisId: string, intervalMs = 1400) {
     error: null,
     loading: Boolean(analysisId),
   });
-  const refresh = useCallback(() => setRefreshVersion((version) => version + 1), []);
+  const refresh = useCallback(() => setRefreshVersion((v) => v + 1), []);
 
   useEffect(() => {
     if (!analysisId) {
@@ -34,26 +34,32 @@ export function useAnalysis(analysisId: string, intervalMs = 1400) {
     let active = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
 
-    const poll = async () => {
+    async function poll() {
       try {
-        const status = await satqueryApi.analysisStatus(analysisId);
+        const polledStatus = await satqueryApi.analysisStatus(analysisId);
         if (!active) return;
-        setState((current) => ({ ...current, status, error: null, loading: false }));
-        if (status.status === 'completed') {
-          const result = await satqueryApi.analysisResult(analysisId);
-          if (active) setState({ status, result, error: null, loading: false });
+        setState((cur) => ({ ...cur, status: polledStatus, error: null, loading: false }));
+        if (polledStatus.status === 'completed') {
+          const polledResult = await satqueryApi.analysisResult(analysisId);
+          if (active) setState({ status: polledStatus, result: polledResult, error: null, loading: false });
           return;
         }
-        if (status.status === 'failed' || status.status === 'needs_clarification') return;
+        if (polledStatus.status === 'failed') return;
+        if (polledStatus.status === 'needs_clarification') {
+          timer = setTimeout(poll, 2500);
+          return;
+        }
         timer = setTimeout(poll, intervalMs);
-      } catch (error) {
+      } catch (pollErr) {
         if (!active) return;
-        const message = error instanceof SatQueryApiError ? error.message : 'Could not reach the local SatQuery backend.';
-        setState((current) => ({ ...current, error: message, loading: false }));
+        const pollErrMsg = pollErr instanceof SatQueryApiError
+          ? pollErr.message
+          : 'Could not reach the local SatQuery backend.';
+        setState((cur) => ({ ...cur, error: pollErrMsg, loading: false }));
       }
-    };
+    }
 
-    setState((current) => ({ ...current, error: null, loading: true }));
+    setState((cur) => ({ ...cur, error: null, loading: true }));
     void poll();
     return () => {
       active = false;
@@ -63,4 +69,3 @@ export function useAnalysis(analysisId: string, intervalMs = 1400) {
 
   return { ...state, refresh };
 }
-

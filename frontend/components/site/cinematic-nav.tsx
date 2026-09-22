@@ -1,19 +1,22 @@
-import Link from 'next/link';
+﻿import Link from 'next/link';
 import { ArrowUpRight } from 'lucide-react';
 
-type NavigationKey = 'capabilities' | 'process' | 'evidence' | 'history';
+import { SatIcon } from '@/components/site/sat-icon';
+
+type NavigationKey = 'home' | 'capabilities' | 'process' | 'evidence';
 
 const navigation = [
-  { key: 'capabilities', href: '/capabilities', label: 'Capabilities' },
-  { key: 'process', href: '/process', label: 'Process' },
-  { key: 'evidence', href: '/evidence', label: 'Evidence' },
-  { key: 'history', href: '/history', label: 'History' },
+  { key: 'home', href: '/#home', label: 'Home' },
+  { key: 'capabilities', href: '/#capabilities', label: 'Capabilities' },
+  { key: 'process', href: '/#process', label: 'Process' },
+  { key: 'evidence', href: '/#evidence', label: 'Evidence' },
 ] as const;
 
 export function CinematicNav({ active }: { active?: NavigationKey }) {
   return (
     <header className="cinematic-header">
       <Link href="/" className="cinematic-wordmark" aria-label="SatQuery AI home">
+        <span className="cinematic-mark"><SatIcon /></span>
         <strong>SATQUERY</strong><span>/ AI</span>
       </Link>
       <nav aria-label="Primary navigation">
@@ -29,7 +32,6 @@ export function CinematicNav({ active }: { active?: NavigationKey }) {
         ))}
       </nav>
       <div className="cinematic-nav-actions">
-        <span className="nav-link-status"><i /> System online</span>
         <Link href="/workspace" className="cinematic-launch">
           <span>Open workspace</span><ArrowUpRight aria-hidden="true" />
         </Link>

@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: satquery-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    region: singapore
+    envVars:
+      - key: SATQUERY_ENV
+        value: production
+      - key: SATQUERY_DATABASE_URL
+        value: postgresql://neondb_owner:npg_aZ3CDn8jpyqQ@ep-quiet-glade-b3ebco86-pooler.c-4.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+      - key: DATABASE_URL
+        value: postgresql://neondb_owner:npg_aZ3CDn8jpyqQ@ep-quiet-glade-b3ebco86-pooler.c-4.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+      - key: SATQUERY_CORS_ORIGINS
+        value: https://SatQueryAI.ettalabs.in,https://satqueryai.ettalabs.in,http://localhost:3000
+        value: https://satqueryai.ettalabs.in,https://SatQueryAI.ettalabs.in,https://sat.ettalabs.in,http://localhost:3000
+        value: https://satqueryai.ettalabs.in,https://SatQueryAI.ettalabs.in,https://api.satqueryai.ettalabs.in,http://localhost:3000
+      - key: SATQUERY_QUEUE_MODE
+        value: inline
+      - key: SATQUERY_PIPELINE_MODE
+        value: python
+      - key: SATQUERY_PIPELINE_CALLABLE
+        value: app.pipeline.runner.execute
+      - key: SATQUERY_SATVLM_REMOTE_URL
+        sync: false
+        value: https://satvlm.ettalabs.in
+
+

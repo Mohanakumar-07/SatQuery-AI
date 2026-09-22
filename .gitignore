@@ -1,8 +1,12 @@
+# ============================================================================
+# SatQuery AI -- Comprehensive .gitignore
+# ============================================================================
+
 # ---- Python ----
 __pycache__/
 *.py[cod]
+*$py.class
 *.egg-info/
-# Any virtualenv: .venv, .venv-ml, venv, env, ...
 .venv*/
 venv*/
 env*/
@@ -22,27 +26,66 @@ var/
 *.db
 *.db-wal
 *.db-shm
+*.db-journal
+*.sqlite
 *.sqlite3
+backend/app.db
+langgraph_checkpoints.db*
+*.checkpoint
+.langchain*
+.langgraph*
+*.log
+logs/
 
-# Stored uploads, masks, overlays, reports and checkpoints are runtime data.
+# Stored uploads, masks, overlays, reports and checkpoints are runtime data
 artifacts/uploads/*
 artifacts/masks/*
 artifacts/geojson/*
 artifacts/reports/*
+artifacts/scenes/*
 artifacts/checkpoints/*
+artifacts/uploads/**
+artifacts/masks/**
+artifacts/geojson/**
+artifacts/reports/**
+artifacts/scenes/**
+artifacts/checkpoints/**
+artifacts/work/**
 !artifacts/uploads/.gitkeep
 !artifacts/masks/.gitkeep
 !artifacts/geojson/.gitkeep
 !artifacts/reports/.gitkeep
+!artifacts/scenes/.gitkeep
 !artifacts/checkpoints/.gitkeep
 
-# ---- Secrets / local env ----
+
+# ---- Secrets, local environment & temporary working directories ----
 .env
 .env.local
+.env.*.local
+.env.example
 *.pem
+Temp/
+temp/
+tmp/
+scratch/
+# ---- Implementation plans, status reports & scratch scripts (NEVER commit) ----
+INTEGRATION_STATUS_REPORT.md
+SatQuery_LangGraph_LangChain_Architecture_v3.md
+*Plan*.md
+*plan*.md
+docs/*Plan*.md
+docs/*plan*.md
+scripts/
 
-# ---- Model weights, checkpoints, archives and datasets: NEVER commit ----
-# Weights and exported models
+# ---- Model weights, checkpoints & architecture archives: NEVER commit ----
+models/
+models/**
+checkpoints/
+**/checkpoints/**
+sar-fuse-V3/
+sar-fuse-V3/**
+!artifacts/checkpoints/.gitkeep
 *.pt
 *.pth
 *.pt2
@@ -67,7 +110,7 @@ artifacts/checkpoints/*
 *.msgpack
 *.lstm
 
-# Distribution archives (change checkpoints arrive as .zip / .tar.gz)
+# Distribution archives
 *.zip
 *.tar
 *.tar.gz
@@ -85,7 +128,7 @@ artifacts/checkpoints/*
 *.ISO
 *.iso
 
-# Raster, tile and vector payloads (GeoTIFF scenes, BigEarthNet/SEN12MS tiles, GIS layers)
+# Raster, tile and geospatial vector payloads (GeoTIFF scenes, GIS layers)
 *.tif
 *.tiff
 *.gtif
@@ -125,7 +168,7 @@ artifacts/checkpoints/*
 *.SAFE/
 *.rasdaman/
 
-# Experiment, cache and run output
+# Experiment, cache and run logs
 runs/
 lightning_logs/
 mlruns/
@@ -139,27 +182,86 @@ models--*/
 deepface/
 nltk_data/
 
-# ---- ml/: keep the folder and the team's code, push none of its data ----
-# Third-party clones carry their own .git and must not become an embedded repo.
-# Re-create locally with:
-#   git clone --depth 1 https://github.com/wgcxb/ChangeFormer ml/vendor/ChangeFormer
+# ============================================================================
+# Datasets, Raw Imagery, Tiles & Benchmark Partitions: NEVER commit
+# ============================================================================
+# Generic data and dataset root directories
+/data/
+/data/**
+/datasets/
+/datasets/**
+/dataset/
+/dataset/**
+/raw_data/
+/raw_data/**
+/processed_data/
+/processed_data/**
+/patches/
+/patches/**
+/tiles/
+/tiles/**
+
+# Changenet workspace, training data & experiment runs
+changenet/
+changenet/**
+
+# ml/ vendor clones
 /ml/vendor/
 
-# Datasets land here. Code, manifests and notes in this folder stay tracked.
+# ml/ data & dataset storage (code, manifests and documentation stay tracked)
+!/ml/data/
 /ml/data/**
 !/ml/data/*.py
 !/ml/data/*.md
 !/ml/data/*.json
 !/ml/data/.gitkeep
+/ml/datasets/**
+/ml/changeformer/data/**
+/ml/changeformer/datasets/**
+/ml/changeformer/experiments/**
+/ml/changeformer/predictions/**
 
-# BigEarthNet v2.0 dataset (SAR-FuseSeg training data) — never commit the
-# downloaded/extracted patches, only the small manifest JSON under ml/manifests/.
+# Benchmark dataset directories anywhere in repository
+**/oscd/**
+**/OSCD/**
+**/levir/**
+**/LEVIR/**
+**/LEVIR-CD/**
+**/whu/**
+**/WHU/**
+**/WHU-CD/**
+**/bigearthnet/**
+**/BigEarthNet/**
+**/sen12ms/**
+**/SEN12MS/**
+**/dfc2020/**
+**/DFC2020/**
+**/spacenet/**
+**/SpaceNet/**
+**/eurosat/**
+**/EuroSAT/**
+
+# BigEarthNet v2.0 dataset (SAR-FuseSeg training data)
 /ml/data/bigearthnet_subset/
 /ml/data/*.parquet
 /ml/data/.build.lock
 
-# SatVLM (Qwen2.5-VL) model: keep the adapter/training code, never its weights,
-# QLoRA checkpoints, HF cache, or the BigEarthNet.txt training data it downloads.
+# ============================================================================
+# Test image data — manual web testing & demo samples: NEVER commit
+# ============================================================================
+
+# Original BigEarthNet tar archive (1.75 GB)
+bigearthnet-2gb-s1s2-Dataset
+
+# Extracted BigEarthNet dataset (raw .npz patches + rendered PNGs)
+bigearthnet-2gb/
+bigearthnet-2gb/**
+
+# Curated sample test images for web UI testing
+sample_test_data/
+sample_test_data/**
+
+# SatVLM (Qwen2.5-VL) weights, training data & HF cache
 /ml/satvlm/checkpoints/
 /ml/satvlm/data/
 /ml/satvlm/**/*.safetensors
@@ -167,14 +269,31 @@ nltk_data/
 **/.cache/huggingface/
 huggingface_hub/
 
-# ---- Frontend (owned by member 6; nothing generated here yet) ----
+# ---- Frontend ----
 node_modules/
+**/node_modules/
 frontend/dist/
 frontend/.vite/
+frontend/.next/
+frontend/.vinext/
+frontend/.wrangler/
+.wrangler/
+frontend/next-env.d.ts
+*.tsbuildinfo
+frontend/tsconfig.tsbuildinfo
+*.timestamp-*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
-# ---- Editors / OS ----
+# ---- Editors, IDEs & OS files ----
 .idea/
 .vscode/
+*.swp
+*.swo
+*~
 Thumbs.db
 Desktop.ini
 .DS_Store
+

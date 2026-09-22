@@ -120,6 +120,18 @@ class Analysis(TimestampMixin, Base):
     worker_name: Mapped[str | None] = mapped_column(String(80))
     pipeline_mode: Mapped[str | None] = mapped_column(String(16))
 
+    # ---- LangGraph thread memory & atomic single-resume guard ----
+    thread_id: Mapped[str | None] = mapped_column(String(64), index=True)
+    #: NOT_REQUIRED | PENDING | RESUMING | RESUMED | RESUME_FAILED
+    graph_resume_status: Mapped[str] = mapped_column(String(32), default="NOT_REQUIRED", nullable=False)
+    resume_attempt_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_resume_error: Mapped[str | None] = mapped_column(Text)
+    last_resume_attempt_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+    # ---- Analysis reuse & cache identity ----
+    cache_key: Mapped[str | None] = mapped_column(String(128), index=True)
+    cache_hit: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
     #: Number of times this analysis has been queued (guard against duplicate enqueue).
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 

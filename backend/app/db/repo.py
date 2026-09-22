@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.db.base import utcnow
@@ -102,6 +102,16 @@ def list_analyses(
         .offset(offset)
     ).all()
     return list(rows), int(total)
+
+
+def delete_analysis(session: Session, analysis_id: str) -> bool:
+    """Delete an analysis and its cascade links, events, and artifacts."""
+    analysis = session.get(Analysis, analysis_id)
+    if not analysis:
+        return False
+    session.delete(analysis)
+    session.commit()
+    return True
 
 
 def set_roles(session: Session, analysis: Analysis, roles: dict[str, str]) -> None:
@@ -308,3 +318,61 @@ def kv_set(session: Session, key: str, value: Any) -> Any:
         row.updated_at = utcnow()
     session.commit()
     return value
+
+
+# ------------------------------------------------ LangGraph atomic resume & cache
+
+
+def claim_graph_resume(session: Session, analysis_id: str) -> bool:
+    """Atomically claims PENDING -> RESUMING for poll-driven graph resumption.
+
+    Only the request that successfully updates the row owns the resume operation.
+    """
+    stmt = (
+        update(Analysis)
+        .where(
+            Analysis.id == analysis_id,
+            Analysis.graph_resume_status == "PENDING",
+        )
+        .values(
+            graph_resume_status="RESUMING",
+            resume_attempt_count=Analysis.resume_attempt_count + 1,
+            last_resume_attempt_at=utcnow(),
+        )
+    )
+    result = session.execute(stmt)
+    session.commit()
+    return (result.rowcount or 0) > 0
+
+
+def mark_graph_resumed(session: Session, analysis_id: str) -> None:
+    """Marks graph_resume_status as RESUMED upon successful graph continuation."""
+    session.execute(
+        update(Analysis)
+        .where(Analysis.id == analysis_id)
+        .values(graph_resume_status="RESUMED")
+    )
+    session.commit()
+
+
+def mark_graph_resume_failed(session: Session, analysis_id: str, error: str) -> None:
+    """Records explicit RESUME_FAILED state and error message."""
+    session.execute(
+        update(Analysis)
+        .where(Analysis.id == analysis_id)
+        .values(
+            graph_resume_status="RESUME_FAILED",
+            last_resume_error=error[:1000],
+        )
+    )
+    session.commit()
+
+
+def find_cached_analysis(session: Session, cache_key: str) -> Analysis | None:
+    """Locates a previous successfully completed analysis with matching cache identity."""
+    return session.scalars(
+        select(Analysis)
+        .where(Analysis.cache_key == cache_key, Analysis.status == "completed")
+        .order_by(Analysis.finished_at.desc())
+    ).first()
+
