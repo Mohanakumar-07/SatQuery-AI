@@ -150,6 +150,19 @@ class Analysis(TimestampMixin, Base):
         backref="analysis",
     )
 
+    events: Mapped[list["AnalysisEvent"]] = relationship(
+        "AnalysisEvent",
+        lazy="noload",
+        cascade="all, delete-orphan",
+        order_by="AnalysisEvent.at",
+    )
+
+    artifacts_rel: Mapped[list["Artifact"]] = relationship(
+        "Artifact",
+        lazy="noload",
+        cascade="all, delete-orphan",
+    )
+
     @property
     def upload_ids(self) -> list[str]:
         """Upload identifiers in the order the client submitted them."""
@@ -192,7 +205,7 @@ class Artifact(TimestampMixin, Base):
     #: True when the API generated this file for wiring tests, not from a model.
     synthetic: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
-    analysis: Mapped[Analysis] = relationship(backref="artifacts")
+    analysis: Mapped[Analysis] = relationship("Analysis", cascade="save-update, merge")
 
 
 class AnalysisEvent(Base):
@@ -212,7 +225,7 @@ class AnalysisEvent(Base):
     message: Mapped[str | None] = mapped_column(String(255))
     data: Mapped[dict[str, Any] | None] = mapped_column(JSON)
 
-    analysis: Mapped[Analysis] = relationship(backref="events")
+    analysis: Mapped[Analysis] = relationship("Analysis", cascade="save-update, merge")
 
 
 class KeyValue(Base):

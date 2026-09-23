@@ -22,7 +22,12 @@ from typing import Any, Optional
 
 import numpy as np
 from PIL import Image
-import torch
+try:
+    import torch
+    _TORCH_AVAILABLE = True
+except ImportError:
+    torch = None  # type: ignore[assignment]
+    _TORCH_AVAILABLE = False
 
 from app.models.base import AdapterProbe, AdapterRequest, AdapterResponse, BaseSpecialistAdapter
 from app.schemas.common import Warning, WarningLevel
