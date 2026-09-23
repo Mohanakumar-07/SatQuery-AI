@@ -80,20 +80,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         ],
     )
 
-    if settings.cors_origins:
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=list(settings.cors_origins),
-            allow_credentials=False,
-            allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            allow_headers=["*"],
-            expose_headers=["Content-Disposition", "ETag", "X-Request-ID", "X-Process-Time-Ms"],
-        )
-    cors_origins = list(settings.cors_origins) if settings.cors_origins else ["*"]
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"] if ("*" in cors_origins or not cors_origins) else cors_origins,
-        allow_origin_regex=None if ("*" in cors_origins or not cors_origins) else r"^https?://.*$",
+        allow_origins=["*"],
         allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
