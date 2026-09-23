@@ -19,6 +19,7 @@ Hard limits:
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -108,25 +109,51 @@ class ChangeNetAdapter(BaseSpecialistAdapter):
         except Exception as exc:
             raise RuntimeError(f"Failed to load ChangeFormer specialist: {exc}") from exc
 
-    def infer(self, request: AdapterRequest) -> AdapterResponse:
-        if self._impl is None:
-            self.load()
+    def _remote_url(self) -> str | None:
+        """Return remote gateway URL from env var, or None for local inference."""
+        url = os.environ.get("SATQUERY_CHANGENET_URL", "").strip().rstrip("/")
+        return url if url else None
 
+    def infer(self, request: AdapterRequest) -> AdapterResponse:
+        import os, base64, httpx
+
+        remote = self._remote_url()
         before_src = request.bundle.source_for("before")
         after_src = request.bundle.source_for("after")
         if not before_src or not after_src:
             raise ValueError("SceneBundle must have 'before' and 'after' sources for ChangeNet.")
 
-        bundle_dict = {
-            "t1_image": str(before_src.path),
-            "t2_image": str(after_src.path),
-            "transform": before_src.transform,
-            "crs": before_src.crs,
-        }
+        if remote:
+            # --- Remote HTTP inference via Cloudflare tunnel ---
+            logger.info("Delegating ChangeNet inference to remote gateway: %s", remote)
+            before_b64 = base64.b64encode(Path(before_src.path).read_bytes()).decode()
+            after_b64 = base64.b64encode(Path(after_src.path).read_bytes()).decode()
+            payload = {
+                "analysis_id": getattr(request, "analysis_id", None),
+                "before": {"label": "before", "base64": before_b64, "filename": Path(before_src.path).name},
+                "after": {"label": "after", "base64": after_b64, "filename": Path(after_src.path).name},
+                "transform": str(before_src.transform) if before_src.transform else None,
+                "crs": str(before_src.crs) if before_src.crs else None,
+            }
+            try:
+                resp = httpx.post(f"{remote}/infer", json=payload, timeout=300)
+                resp.raise_for_status()
+                result = resp.json()
+            except Exception as exc:
+                raise RuntimeError(f"Remote ChangeFormer gateway error: {exc}") from exc
+        else:
+            # --- Local in-process inference ---
+            if self._impl is None:
+                self.load()
+            bundle_dict = {
+                "t1_image": str(before_src.path),
+                "t2_image": str(after_src.path),
+                "transform": before_src.transform,
+                "crs": before_src.crs,
+            }
+            result = self._impl.execute(bundle_dict)
 
-        result = self._impl.execute(bundle_dict)
         request.work_dir.mkdir(parents=True, exist_ok=True)
-
         geojson_path = request.work_dir / "change_features.geojson"
         geojson_data = result.get("evidence", {}).get("geojson")
         if geojson_data:
@@ -141,5 +168,6 @@ class ChangeNetAdapter(BaseSpecialistAdapter):
             raw_score=result.get("prediction", {}).get("change_percentage"),
             score_kind="change_percentage",
             answer_status="detected" if result.get("prediction", {}).get("changed_pixels", 0) > 0 else "no_change",
-            trace=["changeformer_v6_inferred", "evidence_engine_extracted"],
+            trace=result.get("trace", ["changeformer_v6_inferred"]),
         )
+

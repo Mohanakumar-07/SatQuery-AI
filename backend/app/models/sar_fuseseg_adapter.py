@@ -23,6 +23,7 @@ with strict input validation, frozen 120x120 direct / versioned tiled inference,
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -128,45 +129,45 @@ class SarFuseSegAdapter(BaseSpecialistAdapter):
         except Exception as exc:
             raise RuntimeError(f"Failed to load SAR-FuseSeg specialist: {exc}") from exc
 
-    def infer(self, request: AdapterRequest) -> AdapterResponse:
-        raise NotImplementedInContract("SarFuseSegAdapter.infer() is not implemented.")
-        if self._impl is None:
-            self.load()
+    def _remote_url(self) -> str | None:
+        url = os.environ.get("SATQUERY_SARFUSE_URL", "").strip().rstrip("/")
+        return url if url else None
 
-        # Extract optical and SAR from request bundle
+    def infer(self, request: AdapterRequest) -> AdapterResponse:
+        import base64, httpx
+
+        remote = self._remote_url()
         opt_src = request.bundle.source_for("optical") or request.bundle.source_for("primary")
         sar_src = request.bundle.source_for("sar") or request.bundle.source_for("secondary")
-
         if not opt_src or not sar_src:
-            raise ValueError(
-                "SceneBundle must contain both 'optical' and 'sar' sources for SAR-FuseSeg V3."
-            )
+            raise ValueError("SceneBundle must contain both 'optical' and 'sar' sources for SAR-FuseSeg V3.")
 
-        import rasterio
-        import numpy as np
+        if remote:
+            logger.info("Delegating SAR-FuseSeg inference to remote gateway: %s", remote)
+            optical_b64 = base64.b64encode(Path(opt_src.path).read_bytes()).decode()
+            sar_b64 = base64.b64encode(Path(sar_src.path).read_bytes()).decode()
+            payload = {
+                "analysis_id": getattr(request, "analysis_id", None),
+                "optical": {"label": "optical", "base64": optical_b64, "filename": Path(opt_src.path).name},
+                "sar": {"label": "sar", "base64": sar_b64, "filename": Path(sar_src.path).name},
+                "crs": str(opt_src.crs) if opt_src.crs else None,
+            }
+            try:
+                resp = httpx.post(f"{remote}/infer", json=payload, timeout=300)
+                resp.raise_for_status()
+                result = resp.json()
+            except Exception as exc:
+                raise RuntimeError(f"Remote SAR-FuseSeg gateway error: {exc}") from exc
 
-        # Load optical raster
-        with rasterio.open(opt_src.path) as ds_opt:
-            optical_arr = ds_opt.read()
-            transform = ds_opt.transform
-            crs = ds_opt.crs
+            geojson_data = result.get("geojson")
+            facts_dict = result.get("facts", {})
+            trace = result.get("trace", ["sar_fuseseg_v3_inferred"])
+        else:
+            # Local in-process (stub — model must be implemented first)
+            raise NotImplementedInContract("SarFuseSegAdapter.infer() local path not implemented. Set SATQUERY_SARFUSE_URL to use the tunnel gateway.")
 
-        # Load SAR raster
-        with rasterio.open(sar_src.path) as ds_sar:
-            sar_arr = ds_sar.read()
-
-        bundle_dict = {
-            "optical": optical_arr,
-            "sar": sar_arr,
-            "transform": transform,
-            "crs": crs,
-        }
-
-        facts = self._impl.infer(bundle_dict)
         request.work_dir.mkdir(parents=True, exist_ok=True)
-
         geojson_path = request.work_dir / "landcover_features.geojson"
-        geojson_data = facts.geojson
         if geojson_data:
             geojson_path.write_text(json.dumps(geojson_data, indent=2), encoding="utf-8")
 
@@ -175,9 +176,10 @@ class SarFuseSegAdapter(BaseSpecialistAdapter):
             version=self.version,
             mask_paths=[],
             geojson_paths=[geojson_path] if geojson_data else [],
-            facts=facts.to_dict(),
+            facts=facts_dict,
             raw_score=None,
             score_kind="class_distribution",
             answer_status="success",
-            trace=["sar_fuseseg_v3_inferred", "evidence_engine_extracted"],
+            trace=trace,
         )
+
