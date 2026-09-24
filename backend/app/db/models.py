@@ -205,7 +205,7 @@ class Artifact(TimestampMixin, Base):
     #: True when the API generated this file for wiring tests, not from a model.
     synthetic: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
-    analysis: Mapped[Analysis] = relationship("Analysis", cascade="save-update, merge")
+    analysis: Mapped[Analysis] = relationship("Analysis", cascade="save-update, merge", overlaps="artifacts_rel")
 
 
 class AnalysisEvent(Base):
@@ -225,7 +225,7 @@ class AnalysisEvent(Base):
     message: Mapped[str | None] = mapped_column(String(255))
     data: Mapped[dict[str, Any] | None] = mapped_column(JSON)
 
-    analysis: Mapped[Analysis] = relationship("Analysis", cascade="save-update, merge")
+    analysis: Mapped[Analysis] = relationship("Analysis", cascade="save-update, merge", overlaps="events")
 
 
 class KeyValue(Base):

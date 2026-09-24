@@ -223,7 +223,7 @@ class SatVLMAdapter(BaseSpecialistAdapter):
             if _MODEL is not None and _PROCESSOR is not None:
                 return
 
-            if not torch.cuda.is_available():
+            if not _TORCH_AVAILABLE or not torch.cuda.is_available():
                 raise RuntimeError("CUDA_REQUIRED: SatVLM requires an active CUDA GPU for 4-bit NF4 inference.")
 
             model_path = resolve_model_path()

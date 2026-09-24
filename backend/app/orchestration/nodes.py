@@ -486,8 +486,10 @@ def dispatch_specialist_node(state: SatQueryState) -> Dict[str, Any]:
 
         if "SatVLM" in specialists and task == "single_scene_vqa":
             satvlm_adapter = SatVLMAdapter()
-            if satvlm_adapter.available().available:
-                satvlm_adapter.load()
+            _satvlm_remote = os.environ.get("SATQUERY_SATVLM_REMOTE_URL")
+            if _satvlm_remote or satvlm_adapter.available().available:
+                if not _satvlm_remote:
+                    satvlm_adapter.load()
                 work_dir = store.root / "work" / analysis_id
                 work_dir.mkdir(parents=True, exist_ok=True)
                 # Extract prior conversation history for multi-turn conversational context

@@ -20,6 +20,10 @@ COPY backend/requirements-geospatial.txt ./requirements-geospatial.txt
 RUN pip install --no-cache-dir -r requirements.txt && \
     pip install --no-cache-dir rasterio shapely pyproj scipy httpx
 
+# libexpat1 is required at runtime by rasterio's manylinux wheel (GDAL XML parsing).
+# Separate RUN step so this layer is never served stale from Docker cache.
+RUN apt-get update && apt-get install -y --no-install-recommends libexpat1 && rm -rf /var/lib/apt/lists/*
+
 # Copy source tree and backend application
 COPY src/ ./src/
 COPY backend/ ./backend/
