@@ -18,7 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY backend/requirements.txt ./requirements.txt
 COPY backend/requirements-geospatial.txt ./requirements-geospatial.txt
 RUN pip install --no-cache-dir -r requirements.txt && \
-    pip install --no-cache-dir rasterio shapely pyproj httpx
+    pip install --no-cache-dir rasterio shapely pyproj scipy httpx
 
 # Copy source tree and backend application
 COPY src/ ./src/
